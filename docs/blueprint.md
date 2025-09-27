@@ -1,4 +1,4 @@
-# **App Name**: Sweet Track
+# **App Name**: BMS
 
 ## Core Features:
 
