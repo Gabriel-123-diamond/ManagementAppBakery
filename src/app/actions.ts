@@ -1,3 +1,4 @@
+
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -400,54 +401,58 @@ export type DashboardStats = {
 export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly'): Promise<DashboardStats> {
     try {
         let ordersQuery;
-
-        if (filter) {
-            const now = new Date();
-            let startOfPeriod: Date;
-            let endOfPeriod: Date = endOfDay(now);
-
-            switch (filter) {
-                case 'daily':
-                    startOfPeriod = startOfDay(now);
-                    break;
-                case 'weekly':
-                    startOfPeriod = startOfWeek(now, { weekStartsOn: 1 });
-                    break;
-                case 'monthly':
-                default:
-                    startOfPeriod = startOfMonth(now);
-                    break;
-                case 'yearly':
-                    startOfPeriod = dateFnsStartOfYear(now);
-                    endOfPeriod = dateFnsEndOfYear(now);
-                    break;
-            }
-            ordersQuery = query(
-                collection(db, "orders"), 
-                where("date", ">=", Timestamp.fromDate(startOfPeriod)),
-                where("date", "<=", Timestamp.fromDate(endOfPeriod))
-            );
-        } else {
-            ordersQuery = query(collection(db, "orders"));
-        }
         
-        const ordersSnapshot = await getDocs(ordersQuery);
+        // This query fetches all orders regardless of the filter, which is more reliable for total counts.
+        const allOrdersQuery = query(collection(db, "orders"));
+        const allOrdersSnapshot = await getDocs(allOrdersQuery);
         
         let revenue = 0;
         let activeOrders = 0;
-        ordersSnapshot.forEach(orderDoc => {
+        let sales = 0;
+
+        const now = new Date();
+        let startOfPeriod: Date;
+        let endOfPeriod: Date = endOfDay(now);
+
+        switch (filter) {
+            case 'daily':
+                startOfPeriod = startOfDay(now);
+                break;
+            case 'weekly':
+                startOfPeriod = startOfWeek(now, { weekStartsOn: 1 });
+                break;
+            case 'monthly':
+            default:
+                startOfPeriod = startOfMonth(now);
+                break;
+            case 'yearly':
+                startOfPeriod = dateFnsStartOfYear(now);
+                endOfPeriod = dateFnsEndOfYear(now);
+                break;
+        }
+
+        allOrdersSnapshot.forEach(orderDoc => {
             const order = orderDoc.data();
-            if (order.total && typeof order.total === 'number') {
-                revenue += order.total;
+            const orderDate = (order.date as Timestamp).toDate();
+            
+            // Calculate revenue and sales for the selected filter period
+            if (orderDate >= startOfPeriod && orderDate <= endOfPeriod) {
+                if (order.total && typeof order.total === 'number') {
+                    revenue += order.total;
+                }
+                sales++;
             }
+
+            // Active orders are counted regardless of date range
             if (order.status === 'Pending') {
                 activeOrders++;
             }
         });
 
+        // Customer count is total unique customers ever
         const customersSnapshot = await getDocs(collection(db, "customers"));
 
-        const now = new Date();
+        // Weekly revenue is always for the current week
         const weekStart = startOfWeek(now, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
         const daysInWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -478,7 +483,7 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
         return {
             revenue,
             customers: customersSnapshot.size,
-            sales: ordersSnapshot.size,
+            sales,
             activeOrders,
             weeklyRevenue: weeklyRevenueData,
         };
@@ -1493,7 +1498,7 @@ export async function handleLogPayment(supplierId: string, amount: number): Prom
         // 2. Add a corresponding expense record
         const expenseRef = doc(collection(db, "indirectCosts"));
         const supplierDoc = await getDoc(supplierRef);
-        const supplierName = supplierDoc.exists() ? supplierDoc.data().name : 'Unknown Supplier';
+        const supplierName = supplierDoc.exists() ? supplier.data().name : 'Unknown Supplier';
         batch.set(expenseRef, {
             category: "Creditor Payments",
             description: `Payment to supplier: ${supplierName}`,
@@ -1992,7 +1997,7 @@ export async function getProductionTransfers(): Promise<Transfer[]> {
       collection(db, 'transfers'),
       where('status', '==', 'pending'),
       where('notes', '>=', 'Return from production batch'),
-      where('notes', '<', 'Return from production batch' + '\uf8ff')
+      where('notes', '<=', 'Return from production batch' + '\uf8ff')
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(docSnap => {
@@ -2074,18 +2079,10 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             // This case handles a driver/showroom returning unsold stock to the storekeeper.
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
-                    const staffStockDoc = await transaction.get(staffStockRef);
-
-                    if (staffStockDoc.exists()) {
-                         transaction.update(staffStockRef, { stock: increment(item.quantity) });
-                    } else {
-                         transaction.set(staffStockRef, {
-                            productId: item.productId,
-                            productName: item.productName,
-                            stock: item.quantity,
-                        });
-                    }
+                    // This logic assumes returns always go to main product stock.
+                    // If it should go to another staff's personal stock, this needs adjustment.
+                    const productRef = doc(db, 'products', item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -2409,12 +2406,18 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
             }
 
             if (data.wastedItems.length > 0) {
-                for (const item of data.wastedItems) {
+                const productDocs = await Promise.all(data.wastedItems.map(item => getDoc(doc(db, 'products', item.productId))));
+                
+                for (let i = 0; i < data.wastedItems.length; i++) {
+                    const item = data.wastedItems[i];
+                    const productDoc = productDocs[i];
+                    const productCategory = productDoc.exists() ? productDoc.data().category : 'Unknown';
+
                     const wasteLogRef = doc(collection(db, 'waste_logs'));
                     transaction.set(wasteLogRef, {
                         productId: item.productId,
-                        productName: item.productName,
-                        productCategory: 'Breads', // TODO: This should be dynamic
+                        productName: item.productName || 'Unknown',
+                        productCategory: productCategory,
                         quantity: item.quantity,
                         reason: 'Production Waste',
                         notes: `From production batch ${data.batchId}`,
@@ -2730,7 +2733,12 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             for(const ref of stockRefs) {
                 const stockDoc = await transaction.get(ref);
                  if (!stockDoc.exists()) {
-                    throw new Error(`Stock record not found for an item.`);
+                    // Try checking main product stock as a fallback for some roles.
+                    const mainProductRef = doc(db, 'products', ref.id);
+                    const mainProductDoc = await transaction.get(mainProductRef);
+                    if (!mainProductDoc.exists()) {
+                        throw new Error(`Stock record not found for an item.`);
+                    }
                 }
             }
             const salesDocId = format(orderDate, 'yyyy-MM-dd');
@@ -2739,7 +2747,8 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
 
             for (let i = 0; i < data.items.length; i++) {
                 const item = data.items[i];
-                const stockRef = stockRefs[i];
+                // Always deduct from personal stock for POS sales
+                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
@@ -3446,3 +3455,6 @@ export async function returnUnusedIngredients(
     }
 }
 
+
+
+    
