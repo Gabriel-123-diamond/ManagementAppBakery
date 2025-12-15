@@ -400,16 +400,6 @@ export type DashboardStats = {
 
 export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly'): Promise<DashboardStats> {
     try {
-        let ordersQuery;
-        
-        // This query fetches all orders regardless of the filter, which is more reliable for total counts.
-        const allOrdersQuery = query(collection(db, "orders"));
-        const allOrdersSnapshot = await getDocs(allOrdersQuery);
-        
-        let revenue = 0;
-        let activeOrders = 0;
-        let sales = 0;
-
         const now = new Date();
         let startOfPeriod: Date;
         let endOfPeriod: Date = endOfDay(now);
@@ -431,26 +421,26 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
                 break;
         }
 
-        allOrdersSnapshot.forEach(orderDoc => {
-            const order = orderDoc.data();
-            const orderDate = (order.date as Timestamp).toDate();
-            
-            // Calculate revenue and sales for the selected filter period
-            if (orderDate >= startOfPeriod && orderDate <= endOfPeriod) {
-                if (order.total && typeof order.total === 'number') {
-                    revenue += order.total;
-                }
-                sales++;
-            }
-
-            // Active orders are counted regardless of date range
-            if (order.status === 'Pending') {
-                activeOrders++;
-            }
-        });
+        // Query orders within the selected filter period
+        const ordersQuery = query(
+            collection(db, "orders"),
+            where("date", ">=", Timestamp.fromDate(startOfPeriod)),
+            where("date", "<=", Timestamp.fromDate(endOfPeriod))
+        );
+        const ordersSnapshot = await getDocs(ordersQuery);
+        
+        const revenue = ordersSnapshot.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
+        const sales = ordersSnapshot.size;
+        
+        // Active orders are pending orders regardless of date range
+        const activeOrdersQuery = query(collection(db, "orders"), where("status", "==", "Pending"));
+        const activeOrdersSnapshot = await getDocs(activeOrdersQuery);
+        const activeOrders = activeOrdersSnapshot.size;
 
         // Customer count is total unique customers ever
         const customersSnapshot = await getDocs(collection(db, "customers"));
+        const customers = customersSnapshot.size;
+
 
         // Weekly revenue is always for the current week
         const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -482,7 +472,7 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
         
         return {
             revenue,
-            customers: customersSnapshot.size,
+            customers,
             sales,
             activeOrders,
             weeklyRevenue: weeklyRevenueData,
@@ -2079,10 +2069,21 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             // This case handles a driver/showroom returning unsold stock to the storekeeper.
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
-                    // This logic assumes returns always go to main product stock.
-                    // If it should go to another staff's personal stock, this needs adjustment.
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
+                    // This logic assumes returns always go to the personal stock of the receiver (e.g., storekeeper)
+                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
+                    const staffStockDoc = await transaction.get(staffStockRef);
+                    
+                    if (staffStockDoc.exists()) {
+                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    } else {
+                        // If the storekeeper doesn't have a personal stock record for this item, create one
+                        const productDoc = await getDoc(doc(db, 'products', item.productId));
+                        transaction.set(staffStockRef, {
+                            productId: item.productId,
+                            productName: productDoc.exists() ? productDoc.data().name : 'Unknown Product',
+                            stock: item.quantity,
+                        });
+                    }
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -2406,17 +2407,14 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
             }
 
             if (data.wastedItems.length > 0) {
-                const productDocs = await Promise.all(data.wastedItems.map(item => getDoc(doc(db, 'products', item.productId))));
-                
-                for (let i = 0; i < data.wastedItems.length; i++) {
-                    const item = data.wastedItems[i];
-                    const productDoc = productDocs[i];
-                    const productCategory = productDoc.exists() ? productDoc.data().category : 'Unknown';
+                for (const item of data.wastedItems) {
+                    const productDoc = await getDoc(doc(db, 'products', item.productId));
+                    const productCategory = productDoc.exists() ? productDoc.data()?.category : 'Unknown';
 
                     const wasteLogRef = doc(collection(db, 'waste_logs'));
                     transaction.set(wasteLogRef, {
                         productId: item.productId,
-                        productName: item.productName || 'Unknown',
+                        productName: item.productName,
                         productCategory: productCategory,
                         quantity: item.quantity,
                         reason: 'Production Waste',
@@ -3456,5 +3454,7 @@ export async function returnUnusedIngredients(
 }
 
 
+
+    
 
     

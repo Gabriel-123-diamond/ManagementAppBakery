@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -621,15 +622,15 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
 
             <Card>
                 <CardHeader>
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
                             <CardTitle>Transaction History</CardTitle>
                             <CardDescription>A complete log of all supplies and payments for {supplier.name}.</CardDescription>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                                <Input placeholder="Search logs..." className="pl-10 w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                <Input placeholder="Search logs..." className="pl-10 w-full sm:w-auto" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                              <Popover>
                                 <PopoverTrigger asChild>
@@ -885,3 +886,5 @@ export default function SuppliersPage() {
         </div>
     );
 }
+
+    
