@@ -1,5 +1,3 @@
-
-
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -401,35 +399,38 @@ export type DashboardStats = {
 
 export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly'): Promise<DashboardStats> {
     try {
-        const now = new Date();
-        let startOfPeriod: Date;
-        let endOfPeriod: Date = endOfDay(now);
+        let ordersQuery;
 
-        switch (filter) {
-            case 'daily':
-                startOfPeriod = startOfDay(now);
-                break;
-            case 'weekly':
-                startOfPeriod = startOfWeek(now, { weekStartsOn: 1 });
-                break;
-            case 'monthly':
-            default:
-                startOfPeriod = startOfMonth(now);
-                break;
-            case 'yearly':
-                startOfPeriod = dateFnsStartOfYear(now);
-                endOfPeriod = dateFnsEndOfYear(now);
-                break;
+        if (filter) {
+            const now = new Date();
+            let startOfPeriod: Date;
+            let endOfPeriod: Date = endOfDay(now);
+
+            switch (filter) {
+                case 'daily':
+                    startOfPeriod = startOfDay(now);
+                    break;
+                case 'weekly':
+                    startOfPeriod = startOfWeek(now, { weekStartsOn: 1 });
+                    break;
+                case 'monthly':
+                default:
+                    startOfPeriod = startOfMonth(now);
+                    break;
+                case 'yearly':
+                    startOfPeriod = dateFnsStartOfYear(now);
+                    endOfPeriod = dateFnsEndOfYear(now);
+                    break;
+            }
+            ordersQuery = query(
+                collection(db, "orders"), 
+                where("date", ">=", Timestamp.fromDate(startOfPeriod)),
+                where("date", "<=", Timestamp.fromDate(endOfPeriod))
+            );
+        } else {
+            ordersQuery = query(collection(db, "orders"));
         }
         
-        const startOfPeriodTimestamp = Timestamp.fromDate(startOfPeriod);
-        const endOfPeriodTimestamp = Timestamp.fromDate(endOfPeriod);
-
-        const ordersQuery = query(
-            collection(db, "orders"), 
-            where("date", ">=", startOfPeriodTimestamp),
-            where("date", "<=", endOfPeriodTimestamp)
-        );
         const ordersSnapshot = await getDocs(ordersQuery);
         
         let revenue = 0;
@@ -444,13 +445,9 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
             }
         });
 
-        const customersQuery = query(
-            collection(db, "customers"), 
-            where("joinedDate", ">=", startOfPeriodTimestamp),
-            where("joinedDate", "<=", endOfPeriodTimestamp)
-        );
-        const customersSnapshot = await getDocs(customersQuery);
+        const customersSnapshot = await getDocs(collection(db, "customers"));
 
+        const now = new Date();
         const weekStart = startOfWeek(now, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
         const daysInWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -2076,9 +2073,19 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             
             // This case handles a driver/showroom returning unsold stock to the storekeeper.
             if (transfer.status === 'pending_return') {
-                 for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
+                for (const item of transfer.items) {
+                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
+                    const staffStockDoc = await transaction.get(staffStockRef);
+
+                    if (staffStockDoc.exists()) {
+                         transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    } else {
+                         transaction.set(staffStockRef, {
+                            productId: item.productId,
+                            productName: item.productName,
+                            stock: item.quantity,
+                        });
+                    }
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -2728,7 +2735,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             }
             const salesDocId = format(orderDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
-            await transaction.get(salesDocRef);
+            const salesDoc = await transaction.get(salesDocRef);
 
             for (let i = 0; i < data.items.length; i++) {
                 const item = data.items[i];
@@ -2753,7 +2760,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             transaction.set(newOrderRef, orderData);
             
             const paymentField = data.paymentMethod === 'Cash' ? 'cash' : (data.paymentMethod === 'POS' ? 'pos' : 'transfer');
-            const salesDoc = await getDoc(salesDocRef);
+            
             if (salesDoc.exists()) {
                 transaction.update(salesDocRef, {
                     [paymentField]: increment(data.total),
@@ -3438,5 +3445,4 @@ export async function returnUnusedIngredients(
         return { success: false, error: "Failed to return ingredients." };
     }
 }
-
 

@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -19,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle, Loader2, Search, ArrowLeft, Wallet, ArrowRightLeft } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, Search, ArrowLeft, Wallet, ArrowRightLeft, Calendar as CalendarIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,14 +47,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where, orderBy, increment, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where, orderBy, increment, onSnapshot, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { addDirectCost, handleLogPayment, initializePaystackTransaction } from "@/app/actions";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { DateRange } from "react-day-picker";
 
 type User = {
     name: string;
@@ -453,6 +454,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
     const [isLoading, setIsLoading] = useState(true);
     const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [date, setDate] = useState<DateRange | undefined>();
     
     const canManageSupplies = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper' || user?.role === 'Accountant';
     const canLogPayments = user?.role === 'Accountant' || user?.role === 'Developer';
@@ -461,7 +463,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
 
     const fetchDetails = useCallback(async () => {
         if (!user) return;
-         const ingredientsCollection = collection(db, "ingredients");
+        const ingredientsCollection = collection(db, "ingredients");
         const ingredientSnapshot = await getDocs(ingredientsCollection);
         setIngredients(ingredientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ingredient[]);
 
@@ -510,9 +512,8 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
         
         combinedLogs.sort((a,b) => b.date - a.date);
 
-        // We need to calculate running balance going forwards, so we reverse for calculation then reverse back
         const reversedLogs = [...combinedLogs].reverse();
-        let runningBalance = 0; // Or fetch opening balance if available
+        let runningBalance = 0;
 
         const calculatedTransactions = reversedLogs.map(log => {
              if (log.type === 'supply') {
@@ -524,7 +525,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                     credit: null,
                     balance: runningBalance,
                 }
-            } else { // payment
+            } else { 
                 runningBalance -= log.amount;
                 return {
                     date: log.date,
@@ -538,32 +539,35 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
         
         setTransactions(calculatedTransactions.reverse());
         if(isLoading) setIsLoading(false);
-    }, [supplyLogs, paymentLogs, supplier, isLoading]);
+    }, [supplyLogs, paymentLogs, isLoading]);
 
 
     const filteredTransactions = useMemo(() => {
-        return transactions.filter(log => 
-            log.description.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [transactions, searchTerm]);
+        return transactions.filter(log => {
+            const searchMatch = log.description.toLowerCase().includes(searchTerm.toLowerCase());
+            let dateMatch = true;
+            if (date?.from) {
+                const fromDate = startOfDay(date.from);
+                const toDate = date.to ? endOfDay(date.to) : endOfDay(date.from);
+                dateMatch = log.date >= fromDate && log.date <= toDate;
+            }
+            return searchMatch && dateMatch;
+        });
+    }, [transactions, searchTerm, date]);
 
     const handleSaveLog = async (logData: Omit<SupplyLog, 'id' | 'supplierName'>, user: User) => {
         try {
             const batch = writeBatch(db);
 
-            // 1. Create new supply log
             const logRef = doc(collection(db, 'supply_logs'));
             batch.set(logRef, { ...logData, supplierName: supplier.name });
             
-            // 2. Update ingredient stock
             const ingredientRef = doc(db, 'ingredients', logData.ingredientId);
             batch.update(ingredientRef, { stock: increment(logData.quantity) });
 
-            // 3. Update supplier amount owed
             const supplierRef = doc(db, 'suppliers', supplier.id);
             batch.update(supplierRef, { amountOwed: increment(logData.totalCost) });
             
-            // 4. Add to Direct Costs
             await addDirectCost({
                 description: `Purchase of ${logData.ingredientName} from ${supplier.name}`,
                 category: 'Ingredients',
@@ -627,6 +631,15 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                 <Input placeholder="Search logs..." className="pl-10 w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4"/>
+                                        {date?.from ? (date.to ? `${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}` : format(date.from, "LLL dd, y")) : <span>Filter by date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0"><Calendar mode="range" selected={date} onSelect={setDate} /></PopoverContent>
+                            </Popover>
                             {canLogPayments && user && (
                                 <LogPaymentDialog supplier={supplier} user={user} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
                             )}
