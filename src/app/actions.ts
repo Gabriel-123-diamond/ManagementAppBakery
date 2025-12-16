@@ -424,22 +424,20 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
         const allOrdersSnapshot = await getDocs(collection(db, "orders"));
         const allOrders = allOrdersSnapshot.docs.map(doc => {
             const data = doc.data();
-            return {
-                ...data,
-                date: (data.date as Timestamp).toDate()
-            }
+            const date = (data.date as Timestamp)?.toDate ? (data.date as Timestamp).toDate() : new Date(data.date);
+            return { ...data, date };
         });
         
         const periodOrders = allOrders.filter(order => order.date >= startOfPeriod && order.date <= endOfPeriod);
-
+        
         const revenue = periodOrders.reduce((sum, order) => sum + (order.total || 0), 0);
         const sales = periodOrders.length;
-        
-        const activeOrders = allOrders.filter(order => order.status === 'Pending').length;
         
         const allCustomersSnapshot = await getDocs(collection(db, "customers"));
         const customers = allCustomersSnapshot.size;
         
+        const activeOrders = allOrders.filter(order => order.status === 'Pending').length;
+
         const weekStart = startOfWeek(now, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
         const daysInWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -449,13 +447,13 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
             revenue: 0,
         }));
         
-        const weeklyOrders = allOrders.filter(order => order.date >= weekStart && order.date <= weekEnd);
-        
-        weeklyOrders.forEach(order => {
-            const dayOfWeek = format(order.date, 'E'); 
-            const index = weeklyRevenueData.findIndex(d => d.day === dayOfWeek);
-            if (index !== -1 && order.total && typeof order.total === 'number') {
-                weeklyRevenueData[index].revenue += order.total;
+        allOrders.forEach(order => {
+            if (order.date >= weekStart && order.date <= weekEnd) {
+                const dayOfWeek = format(order.date, 'E'); 
+                const index = weeklyRevenueData.findIndex(d => d.day === dayOfWeek);
+                if (index !== -1 && order.total && typeof order.total === 'number') {
+                    weeklyRevenueData[index].revenue += order.total;
+                }
             }
         });
         
@@ -1972,12 +1970,7 @@ export async function getReturnedStockTransfers(): Promise<Transfer[]> {
 
 export async function getProductionTransfers(): Promise<Transfer[]> {
   try {
-    const q = query(
-      collection(db, 'transfers'),
-      where('status', '==', 'pending'),
-      where('notes', '>=', 'Return from production batch'),
-      where('notes', '<=', 'Return from production batch' + '\uf8ff')
-    );
+    const q = query(collection(db, 'transfers'), where('status', '==', 'pending'), where('notes', '>=', 'Return from production batch'), where('notes', '<=', 'Return from production batch\uf8ff'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(docSnap => {
       const data = docSnap.data();
@@ -2059,7 +2052,16 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
                     const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
-                    transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    const stockDoc = await transaction.get(staffStockRef);
+                    if (stockDoc.exists()) {
+                       transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    } else {
+                       transaction.set(staffStockRef, {
+                           productId: item.productId,
+                           productName: item.productName,
+                           stock: item.quantity,
+                       });
+                    }
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
