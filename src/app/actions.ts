@@ -398,21 +398,15 @@ export type DashboardStats = {
     weeklyRevenue: { day: string, revenue: number }[];
 };
 
-export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly'): Promise<DashboardStats> {
+export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly'): Promise<DashboardStats> {
+    // This function is now primarily handled by a real-time listener on the client.
+    // Kept for potential future use or for non-realtime stats.
     return {
-        revenue: 2450300.50,
-        customers: 82,
-        sales: 256,
-        activeOrders: 5,
-        weeklyRevenue: [
-            { day: 'Mon', revenue: 320000 },
-            { day: 'Tue', revenue: 450000 },
-            { day: 'Wed', revenue: 280000 },
-            { day: 'Thu', revenue: 510000 },
-            { day: 'Fri', revenue: 480000 },
-            { day: 'Sat', revenue: 620000 },
-            { day: 'Sun', revenue: 190000 },
-        ],
+        revenue: 0,
+        customers: 0,
+        sales: 0,
+        activeOrders: 0,
+        weeklyRevenue: [],
     };
 }
 
@@ -3359,5 +3353,6 @@ export async function returnUnusedIngredients(
     
 
     
+
 
 
