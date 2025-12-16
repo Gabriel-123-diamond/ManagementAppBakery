@@ -421,7 +421,6 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
                 break;
         }
 
-        // Query orders within the selected filter period
         const ordersQuery = query(
             collection(db, "orders"),
             where("date", ">=", Timestamp.fromDate(startOfPeriod)),
@@ -432,17 +431,13 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
         const revenue = ordersSnapshot.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
         const sales = ordersSnapshot.size;
         
-        // Active orders are pending orders regardless of date range
         const activeOrdersQuery = query(collection(db, "orders"), where("status", "==", "Pending"));
         const activeOrdersSnapshot = await getDocs(activeOrdersQuery);
         const activeOrders = activeOrdersSnapshot.size;
 
-        // Customer count is total unique customers ever
-        const customersSnapshot = await getDocs(collection(db, "customers"));
-        const customers = customersSnapshot.size;
-
-
-        // Weekly revenue is always for the current week
+        const allCustomersSnapshot = await getDocs(collection(db, "customers"));
+        const customers = allCustomersSnapshot.size;
+        
         const weekStart = startOfWeek(now, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
         const daysInWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -2069,21 +2064,9 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             // This case handles a driver/showroom returning unsold stock to the storekeeper.
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
-                    // This logic assumes returns always go to the personal stock of the receiver (e.g., storekeeper)
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
-                    const staffStockDoc = await transaction.get(staffStockRef);
-                    
-                    if (staffStockDoc.exists()) {
-                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
-                    } else {
-                        // If the storekeeper doesn't have a personal stock record for this item, create one
-                        const productDoc = await getDoc(doc(db, 'products', item.productId));
-                        transaction.set(staffStockRef, {
-                            productId: item.productId,
-                            productName: productDoc.exists() ? productDoc.data().name : 'Unknown Product',
-                            stock: item.quantity,
-                        });
-                    }
+                    // This logic assumes returns always go to the main product stock.
+                    const productRef = doc(db, 'products', item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -2727,28 +2710,20 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
 
     try {
         await runTransaction(db, async (transaction) => {
-            const stockRefs = data.items.map(item => doc(db, 'staff', data.staffId, 'personal_stock', item.productId));
-            for(const ref of stockRefs) {
-                const stockDoc = await transaction.get(ref);
-                 if (!stockDoc.exists()) {
-                    // Try checking main product stock as a fallback for some roles.
-                    const mainProductRef = doc(db, 'products', ref.id);
-                    const mainProductDoc = await transaction.get(mainProductRef);
-                    if (!mainProductDoc.exists()) {
-                        throw new Error(`Stock record not found for an item.`);
-                    }
+            for (const item of data.items) {
+                // Always deduct from personal stock for POS sales
+                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
+                const stockDoc = await transaction.get(stockRef);
+                
+                if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
+                    throw new Error(`Not enough stock for ${item.name}. Available: ${stockDoc.data()?.stock || 0}, trying to sell: ${item.quantity}`);
                 }
+                transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
+            
             const salesDocId = format(orderDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
-
-            for (let i = 0; i < data.items.length; i++) {
-                const item = data.items[i];
-                // Always deduct from personal stock for POS sales
-                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
-                transaction.update(stockRef, { stock: increment(-item.quantity) });
-            }
             
             const orderData = {
                 id: newOrderRef.id,

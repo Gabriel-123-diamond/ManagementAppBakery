@@ -632,14 +632,16 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                 <Input placeholder="Search logs..." className="pl-10 w-full sm:w-auto" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
-                             <Popover>
+                            <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
+                                    <Button variant={"outline"} className={cn("w-[240px] justify-start text-left font-normal", !date && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4"/>
                                         {date?.from ? (date.to ? `${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}` : format(date.from, "LLL dd, y")) : <span>Filter by date</span>}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><Calendar mode="range" selected={date} onSelect={setDate} /></PopoverContent>
+                                <PopoverContent className="w-auto p-0" align="end">
+                                    <Calendar mode="range" selected={date} onSelect={setDate} initialFocus />
+                                </PopoverContent>
                             </Popover>
                             {canLogPayments && user && (
                                 <LogPaymentDialog supplier={supplier} user={user} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
