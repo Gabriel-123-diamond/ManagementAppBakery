@@ -414,6 +414,7 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
             case 'monthly':
             default:
                 startOfPeriod = startOfMonth(now);
+                endOfPeriod = endOfMonth(now);
                 break;
             case 'yearly':
                 startOfPeriod = dateFnsStartOfYear(now);
@@ -427,16 +428,18 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
             const date = (data.date as Timestamp)?.toDate ? (data.date as Timestamp).toDate() : new Date(data.date);
             return { ...data, date };
         });
-        
+
         const periodOrders = allOrders.filter(order => order.date >= startOfPeriod && order.date <= endOfPeriod);
-        
+
         const revenue = periodOrders.reduce((sum, order) => sum + (order.total || 0), 0);
         const sales = periodOrders.length;
         
-        const allCustomersSnapshot = await getDocs(collection(db, "customers"));
-        const customers = allCustomersSnapshot.size;
-        
-        const activeOrders = allOrders.filter(order => order.status === 'Pending').length;
+        const customerIds = new Set(periodOrders.map(order => order.customerId).filter(id => id && id !== 'walk-in'));
+        const customers = customerIds.size;
+
+        const activeOrdersQuery = query(collection(db, "orders"), where('status', '==', 'Pending'));
+        const activeOrdersSnapshot = await getDocs(activeOrdersQuery);
+        const activeOrders = activeOrdersSnapshot.size;
 
         const weekStart = startOfWeek(now, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
@@ -2051,17 +2054,9 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             // This case handles a driver/showroom returning unsold stock to the storekeeper.
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
-                    const stockDoc = await transaction.get(staffStockRef);
-                    if (stockDoc.exists()) {
-                       transaction.update(staffStockRef, { stock: increment(item.quantity) });
-                    } else {
-                       transaction.set(staffStockRef, {
-                           productId: item.productId,
-                           productName: item.productName,
-                           stock: item.quantity,
-                       });
-                    }
+                    const productRef = doc(db, 'products', item.productId);
+                    if (!productRef) throw new Error(`Product with ID ${item.productId} not found.`);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -3428,3 +3423,4 @@ export async function returnUnusedIngredients(
     
 
     
+
