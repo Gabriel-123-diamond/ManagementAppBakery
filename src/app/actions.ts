@@ -2,7 +2,7 @@
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfYear, eachDayOfInterval, format, subDays, endOfHour, startOfHour, startOfYear as dateFnsStartOfYear } from "date-fns";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfYear, eachDayOfInterval, format, subDays, endOfHour, startOfHour, startOfYear as dateFnsStartOfYear, endOfYear as dateFnsEndOfYear } from "date-fns";
 import { db } from "@/lib/firebase";
 import { randomUUID } from 'crypto';
 import speakeasy from 'speakeasy';
@@ -421,20 +421,22 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
                 break;
         }
 
-        const ordersQuery = query(
-            collection(db, "orders"),
-            where("date", ">=", Timestamp.fromDate(startOfPeriod)),
-            where("date", "<=", Timestamp.fromDate(endOfPeriod))
-        );
-        const ordersSnapshot = await getDocs(ordersQuery);
+        const allOrdersSnapshot = await getDocs(collection(db, "orders"));
+        const allOrders = allOrdersSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                date: (data.date as Timestamp).toDate()
+            }
+        });
         
-        const revenue = ordersSnapshot.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
-        const sales = ordersSnapshot.size;
-        
-        const activeOrdersQuery = query(collection(db, "orders"), where("status", "==", "Pending"));
-        const activeOrdersSnapshot = await getDocs(activeOrdersQuery);
-        const activeOrders = activeOrdersSnapshot.size;
+        const periodOrders = allOrders.filter(order => order.date >= startOfPeriod && order.date <= endOfPeriod);
 
+        const revenue = periodOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+        const sales = periodOrders.length;
+        
+        const activeOrders = allOrders.filter(order => order.status === 'Pending').length;
+        
         const allCustomersSnapshot = await getDocs(collection(db, "customers"));
         const customers = allCustomersSnapshot.size;
         
@@ -447,18 +449,10 @@ export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' |
             revenue: 0,
         }));
         
-        const weeklyOrdersQuery = query(
-            collection(db, "orders"), 
-            where("date", ">=", Timestamp.fromDate(weekStart)),
-            where("date", "<=", Timestamp.fromDate(weekEnd))
-        );
-        const weeklyOrdersSnapshot = await getDocs(weeklyOrdersQuery);
+        const weeklyOrders = allOrders.filter(order => order.date >= weekStart && order.date <= weekEnd);
         
-        weeklyOrdersSnapshot.forEach(orderDoc => {
-            const order = orderDoc.data();
-            const orderTimestamp = order.date as Timestamp;
-            const orderDate = orderTimestamp.toDate();
-            const dayOfWeek = format(orderDate, 'E'); 
+        weeklyOrders.forEach(order => {
+            const dayOfWeek = format(order.date, 'E'); 
             const index = weeklyRevenueData.findIndex(d => d.day === dayOfWeek);
             if (index !== -1 && order.total && typeof order.total === 'number') {
                 weeklyRevenueData[index].revenue += order.total;
@@ -1483,7 +1477,7 @@ export async function handleLogPayment(supplierId: string, amount: number): Prom
         // 2. Add a corresponding expense record
         const expenseRef = doc(collection(db, "indirectCosts"));
         const supplierDoc = await getDoc(supplierRef);
-        const supplierName = supplierDoc.exists() ? supplier.data().name : 'Unknown Supplier';
+        const supplierName = supplierDoc.exists() ? supplierDoc.data()!.name : 'Unknown Supplier';
         batch.set(expenseRef, {
             category: "Creditor Payments",
             description: `Payment to supplier: ${supplierName}`,
@@ -2064,9 +2058,8 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             // This case handles a driver/showroom returning unsold stock to the storekeeper.
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
-                    // This logic assumes returns always go to the main product stock.
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
+                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
+                    transaction.update(staffStockRef, { stock: increment(item.quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -2397,8 +2390,8 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
                     const wasteLogRef = doc(collection(db, 'waste_logs'));
                     transaction.set(wasteLogRef, {
                         productId: item.productId,
-                        productName: item.productName,
-                        productCategory: productCategory,
+                        productName: item.productName || 'Unknown',
+                        productCategory: productCategory || 'Unknown',
                         quantity: item.quantity,
                         reason: 'Production Waste',
                         notes: `From production batch ${data.batchId}`,
@@ -2711,7 +2704,6 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
     try {
         await runTransaction(db, async (transaction) => {
             for (const item of data.items) {
-                // Always deduct from personal stock for POS sales
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
                 
@@ -2745,19 +2737,20 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             
             if (salesDoc.exists()) {
                 transaction.update(salesDocRef, {
-                    [paymentField]: increment(data.total),
-                    total: increment(data.total)
+                    total: increment(data.total),
+                    [paymentField]: increment(data.total)
                 });
             } else {
                 transaction.set(salesDocRef, {
                     date: Timestamp.fromDate(startOfDay(orderDate)),
                     description: `Daily Sales for ${salesDocId}`,
-                    cash: data.paymentMethod === 'Cash' ? data.total : 0,
-                    pos: data.paymentMethod === 'POS' ? data.total : 0,
-                    transfer: data.paymentMethod === 'Paystack' ? data.total : 0,
+                    cash: 0,
+                    pos: 0,
+                    transfer: 0,
                     creditSales: 0,
                     shortage: 0,
-                    total: data.total
+                    total: data.total,
+                    [paymentField]: data.total
                 });
             }
         });
