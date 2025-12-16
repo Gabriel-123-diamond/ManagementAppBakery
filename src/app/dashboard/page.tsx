@@ -51,7 +51,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore";
-import { db } from '@/lib/firebase';
+import { db } from "@/lib/firebase";
 import { startOfMonth, format, eachDayOfInterval, subDays, startOfDay, endOfDay, endOfYear as dateFnsEndOfYear, startOfYear as dateFnsStartOfYear, endOfMonth, startOfWeek } from 'date-fns';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -157,7 +157,7 @@ function ManagementDashboard() {
 
       const now = new Date();
       let startDate: Date;
-      let endDate: Date = now;
+      let endDate: Date = endOfDay(now);
 
       switch(revenueFilter) {
           case 'daily':
@@ -183,7 +183,7 @@ function ManagementDashboard() {
 
       const revenue = filteredOrders.reduce((sum, order) => sum + order.total, 0);
       const sales = filteredOrders.length;
-      const customers = new Set(filteredOrders.filter(o => o.customerId !== 'walk-in').map(o => o.customerId)).size;
+      const customers = new Set(filteredOrders.filter(o => o.customerId && o.customerId !== 'walk-in').map(o => o.customerId)).size;
 
       // Calculate weekly revenue for the chart
       const weekStart = startOfWeek(now, { weekStartsOn: 1 });
