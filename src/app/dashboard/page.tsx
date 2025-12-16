@@ -211,8 +211,19 @@ function ManagementDashboard() {
           customers,
           weeklyRevenue: weeklyRevenueData
       }));
-      setIsLoading(false);
+      if(isLoading) setIsLoading(false);
     });
+
+    const handleStorageChange = () => {
+        const heldOrders = JSON.parse(localStorage.getItem('heldOrders') || '[]');
+        setStats(prev => ({ ...prev, activeOrders: heldOrders.length }));
+    };
+    
+    // Initial load for active orders
+    handleStorageChange();
+
+    window.addEventListener('storage', handleStorageChange);
+
 
     // Check for missing indexes once
     checkForMissingIndexes().then(indexData => {
@@ -220,8 +231,11 @@ function ManagementDashboard() {
     });
     
     // Cleanup listener on unmount
-    return () => unsubscribe();
-  }, [revenueFilter]);
+    return () => {
+        unsubscribe();
+        window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [revenueFilter, isLoading]);
 
   
   const handleFilterChange = (filter: 'daily' | 'weekly' | 'monthly' | 'yearly') => {
@@ -284,6 +298,7 @@ function ManagementDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeOrders || 0}</div>
+             <p className="text-xs text-muted-foreground">Orders on hold in POS.</p>
           </CardContent>
         </Card>
       </div>
