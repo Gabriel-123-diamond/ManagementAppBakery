@@ -1963,33 +1963,52 @@ export async function getCompletedTransfersForStaff(staffId: string): Promise<Tr
 
 export async function handleAcknowledgeTransfer(transferId: string, action: 'accept' | 'decline'): Promise<{success: boolean, error?: string}> {
     const transferRef = doc(db, 'transfers', transferId);
+    
+    if (action === 'decline') {
+        try {
+            await runTransaction(db, async (transaction) => {
+                const transferDoc = await transaction.get(transferRef);
+                if (!transferDoc.exists()) throw new Error("Transfer does not exist.");
+                const transfer = transferDoc.data() as Transfer;
 
-    try {
-        await runTransaction(db, async (transaction) => {
-            const transferDoc = await transaction.get(transferRef);
-            if (!transferDoc.exists()) throw new Error("Transfer does not exist.");
-            
-            const transfer = transferDoc.data() as Transfer;
-
-            if (action === 'decline') {
                 transaction.update(transferRef, { status: 'cancelled' });
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
                     transaction.update(originalRunRef, { status: 'active' });
                 }
-                return;
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Error declining transfer:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to decline transfer.";
+            return { success: false, error: errorMessage };
+        }
+    }
+
+    // Handle 'accept'
+    try {
+        await runTransaction(db, async (transaction) => {
+            // --- READS FIRST ---
+            const transferDoc = await transaction.get(transferRef);
+            if (!transferDoc.exists()) {
+                throw new Error("Transfer does not exist.");
             }
 
-            // --- Handle Accept ---
+            const transfer = transferDoc.data() as Transfer;
             if (transfer.status !== 'pending' && transfer.status !== 'pending_return') {
                  throw new Error("This transfer has already been processed.");
             }
+
+            const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
+            const staffStockRefs = transfer.items.map(item => doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId));
             
-            // This case handles a driver/showroom returning unsold stock to the storekeeper.
+            const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+            const staffStockDocs = await Promise.all(staffStockRefs.map(ref => transaction.get(ref)));
+            
+            // --- WRITES SECOND ---
             if (transfer.status === 'pending_return') {
-                for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
+                for (let i = 0; i < transfer.items.length; i++) {
+                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -1997,11 +2016,9 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                 }
                 transaction.update(transferRef, { status: 'completed' });
             } 
-            // This case handles a baker transferring finished goods TO the storekeeper.
             else if (transfer.notes?.startsWith('Return from production batch')) {
-                 for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
+                 for (let i = 0; i < transfer.items.length; i++) {
+                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
                 }
                  transaction.update(transferRef, { 
                     status: 'completed',
@@ -2009,11 +2026,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     time_completed: serverTimestamp() 
                 });
             }
-            // This is the standard case: Storekeeper to Driver/Showroom
             else { 
-                const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
-                const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-                
                 for (let i = 0; i < transfer.items.length; i++) {
                     const item = transfer.items[i];
                     const productDoc = productDocs[i];
@@ -2023,13 +2036,11 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     }
 
                     transaction.update(productRefs[i], { stock: increment(-item.quantity) });
-
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
-                    const staffStockDoc = await transaction.get(staffStockRef);
-                    if (staffStockDoc.exists()) {
-                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    
+                    if (staffStockDocs[i].exists()) {
+                        transaction.update(staffStockRefs[i], { stock: increment(item.quantity) });
                     } else {
-                        transaction.set(staffStockRef, {
+                        transaction.set(staffStockRefs[i], {
                             productId: item.productId,
                             productName: item.productName,
                             stock: item.quantity,
@@ -2054,6 +2065,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
         return { success: false, error: errorMessage };
     }
 }
+
 
 export type ProductionBatch = {
     id: string;
@@ -3353,6 +3365,7 @@ export async function returnUnusedIngredients(
     
 
     
+
 
 
 
