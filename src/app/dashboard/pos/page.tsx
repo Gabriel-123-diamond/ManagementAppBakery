@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
@@ -35,7 +36,7 @@ import {
   DialogTitle,
   DialogFooter,
   DialogClose,
-  DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -354,13 +355,6 @@ function POSPageContent() {
     };
   }, [selectedStaffId, fetchProductsForStaff])
   
-  useEffect(() => {
-    if (isReceiptOpen && lastCompletedOrder) {
-        handlePrint(receiptRef.current);
-    }
-  }, [isReceiptOpen, lastCompletedOrder]);
-  
-  
   const handleOfflinePayment = async (method: 'Cash' | 'POS') => {
     setIsConfirmOpen(false);
     setPaymentStatus('processing');
@@ -662,6 +656,7 @@ function POSPageContent() {
                                             height={150}
                                             className="rounded-t-lg object-cover w-full aspect-square transition-transform group-hover:scale-105"
                                             data-ai-hint={product['data-ai-hint']}
+                                            unoptimized
                                             />
                                             {user?.role === 'Developer' && (
                                                 <Button
@@ -737,7 +732,7 @@ function POSPageContent() {
                                 <User className="mr-2 h-4 w-4" />
                                 Walk-in
                             </Button>
-                             <CreateCustomerDialog onCustomerCreated={(c) => {}}>
+                            <CreateCustomerDialog onCustomerCreated={(c) => {}}>
                                 <Button variant={customerType === 'registered' ? 'default' : 'outline'}>
                                     <Building className="mr-2 h-4 w-4" />
                                     Registered
@@ -963,3 +958,4 @@ function POSPageWithSuspense() {
 export default function POSPageWithTypes() {
   return <POSPageWithSuspense />;
 }
+

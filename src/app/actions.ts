@@ -1,4 +1,5 @@
 
+
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -1940,20 +1941,17 @@ export async function getCompletedTransfersForStaff(staffId: string): Promise<Tr
     }
 }
 
-export async function handleAcknowledgeTransfer(transferId: string, action: 'accept' | 'decline'): Promise<{success: boolean, error?: string}> {
+export async function handleAcknowledgeTransfer(transferId: string, action: 'accept' | 'decline'): Promise<{ success: boolean; error?: string }> {
     const transferRef = doc(db, 'transfers', transferId);
     
     try {
         await runTransaction(db, async (transaction) => {
-            // --- READS FIRST ---
             const transferDoc = await transaction.get(transferRef);
-            if (!transferDoc.exists()) {
-                throw new Error("Transfer does not exist.");
-            }
+            if (!transferDoc.exists()) throw new Error("Transfer does not exist.");
 
             const transfer = transferDoc.data() as Transfer;
-            if (transfer.status !== 'pending' && transfer.status !== 'pending_return') {
-                 throw new Error("This transfer has already been processed.");
+            if (!['pending', 'pending_return'].includes(transfer.status)) {
+                throw new Error("This transfer has already been processed.");
             }
 
             if (action === 'decline') {
@@ -1962,14 +1960,18 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
                     transaction.update(originalRunRef, { status: 'active' });
                 }
-                return; // End transaction here for decline
+                return; // End transaction for decline
             }
             
-            // --- ACCEPT LOGIC ---
+            // Handle 'accept'
+            const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
+            const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
             if (transfer.status === 'pending_return') {
-                 for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
+                 for (let i = 0; i < productDocs.length; i++) {
+                    const productDoc = productDocs[i];
+                    if (!productDoc.exists()) throw new Error(`Product ${transfer.items[i].productName} not found.`);
+                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -1978,58 +1980,45 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                 transaction.update(transferRef, { status: 'completed' });
 
             } else if (transfer.notes?.startsWith('Return from production batch')) {
-                for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
-                }
-                transaction.update(transferRef, { 
-                    status: 'completed',
-                    time_received: serverTimestamp(),
-                    time_completed: serverTimestamp() 
-                });
-            } else { 
-                const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
-                const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-
-                for (let i = 0; i < transfer.items.length; i++) {
-                    const item = transfer.items[i];
+                for (let i = 0; i < productDocs.length; i++) {
                     const productDoc = productDocs[i];
-
-                    if (!productDoc.exists() || (productDoc.data().stock || 0) < item.quantity) {
-                        throw new Error(`Not enough stock for ${item.productName} in main inventory.`);
+                    if (!productDoc.exists()) throw new Error(`Product ${transfer.items[i].productName} not found.`);
+                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
+                }
+                transaction.update(transferRef, { status: 'completed', time_received: serverTimestamp(), time_completed: serverTimestamp() });
+            } else { // Standard transfer to staff
+                for (let i = 0; i < productDocs.length; i++) {
+                    const productDoc = productDocs[i];
+                    if (!productDoc.exists() || (productDoc.data()?.stock || 0) < transfer.items[i].quantity) {
+                        throw new Error(`Not enough stock for ${transfer.items[i].productName} in main inventory.`);
                     }
-                    transaction.update(productRefs[i], { stock: increment(-item.quantity) });
+                    transaction.update(productRefs[i], { stock: increment(-transfer.items[i].quantity) });
                     
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
+                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', transfer.items[i].productId);
                     const staffStockDoc = await transaction.get(staffStockRef);
                     if (staffStockDoc.exists()) {
-                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                        transaction.update(staffStockRef, { stock: increment(transfer.items[i].quantity) });
                     } else {
-                        transaction.set(staffStockRef, {
-                            productId: item.productId,
-                            productName: item.productName,
-                            stock: item.quantity,
-                        });
+                        transaction.set(staffStockRef, { productId: transfer.items[i].productId, productName: transfer.items[i].productName, stock: transfer.items[i].quantity });
                     }
                 }
 
                 const newStatus = transfer.is_sales_run ? 'active' : 'completed';
-                transaction.update(transferRef, { 
+                transaction.update(transferRef, {
                     status: newStatus,
                     time_received: serverTimestamp(),
-                    time_completed: transfer.is_sales_run ? null : serverTimestamp() 
+                    time_completed: transfer.is_sales_run ? null : serverTimestamp()
                 });
             }
         });
-
         return { success: true };
-
     } catch (error) {
         console.error("Error acknowledging transfer:", error);
         const errorMessage = error instanceof Error ? error.message : `Failed to ${action} transfer.`;
         return { success: false, error: errorMessage };
     }
 }
+
 
 
 export type ProductionBatch = {
@@ -2607,35 +2596,21 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
 
     try {
         await runTransaction(db, async (transaction) => {
-            // --- READS ---
-            const stockChecks = data.items.map(item => {
+            const stockChecks = data.items.map(async item => {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
-                return transaction.get(stockRef).then(stockDoc => ({
-                    stockRef,
-                    stockDoc,
-                    item,
-                }));
-            });
-
-            const salesDocId = format(orderDate, 'yyyy-MM-dd');
-            const salesDocRef = doc(db, 'sales', salesDocId);
-            const salesDocPromise = transaction.get(salesDocRef);
-
-            const allStockDocs = await Promise.all(stockChecks);
-            const salesDoc = await salesDocPromise;
-
-            // --- VALIDATION ---
-            for (const { stockDoc, item } of allStockDocs) {
+                const stockDoc = await transaction.get(stockRef);
                 if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
                     throw new Error(`Not enough stock for ${item.name}. Available: ${stockDoc.data()?.stock || 0}, trying to sell: ${item.quantity}`);
                 }
-            }
+                return { stockRef, item };
+            });
 
-            // --- WRITES ---
-            for (const { stockRef, item } of allStockDocs) {
-                transaction.update(stockRef, { stock: increment(-item.quantity) });
-            }
-            
+            await Promise.all(stockChecks);
+
+            const salesDocId = format(orderDate, 'yyyy-MM-dd');
+            const salesDocRef = doc(db, 'sales', salesDocId);
+            const salesDoc = await transaction.get(salesDocRef);
+
             const orderData = {
                 id: newOrderRef.id,
                 salesRunId: `pos-sale-${newOrderRef.id}`,
@@ -2651,6 +2626,10 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             };
             
             transaction.set(newOrderRef, orderData);
+            
+            for (const { stockRef, item } of await Promise.all(stockChecks)) {
+                transaction.update(stockRef, { stock: increment(-item.quantity) });
+            }
             
             const paymentField = data.paymentMethod === 'Cash' ? 'cash' : (data.paymentMethod === 'POS' ? 'pos' : 'transfer');
             
@@ -3336,18 +3315,6 @@ export async function returnUnusedIngredients(
         return { success: true };
     } catch (error) {
         console.error("Error returning ingredients:", error);
-        return { success: false, error: "Failed to return ingredients." };
+        return { success: false, error: (error as Error).message };
     }
 }
-
-
-
-    
-
-    
-
-
-
-
-
-
