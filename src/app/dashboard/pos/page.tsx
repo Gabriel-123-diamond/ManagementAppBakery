@@ -34,7 +34,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose
+  DialogClose,
+  DialogTrigger
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -147,7 +148,7 @@ const handlePrint = (node: HTMLElement | null) => {
     }
 };
 
-function CreateCustomerDialog({ onCustomerCreated, children }: { onCustomerCreated: (customer: Customer) => void, children: React.ReactNode }) {
+function CreateCustomerDialog({ onCustomerCreated, children }: { onCustomerCreated: (customer: User) => void, children: React.ReactNode }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState('');
@@ -352,6 +353,13 @@ function POSPageContent() {
         }
     };
   }, [selectedStaffId, fetchProductsForStaff])
+  
+  useEffect(() => {
+    if (isReceiptOpen && lastCompletedOrder) {
+        handlePrint(receiptRef.current);
+    }
+  }, [isReceiptOpen, lastCompletedOrder]);
+  
   
   const handleOfflinePayment = async (method: 'Cash' | 'POS') => {
     setIsConfirmOpen(false);
@@ -730,7 +738,7 @@ function POSPageContent() {
                                 Walk-in
                             </Button>
                              <CreateCustomerDialog onCustomerCreated={(c) => {}}>
-                                <Button variant={customerType === 'registered' ? 'default' : 'outline'} onClick={() => setCustomerType('registered')}>
+                                <Button variant={customerType === 'registered' ? 'default' : 'outline'}>
                                     <Building className="mr-2 h-4 w-4" />
                                     Registered
                                 </Button>
@@ -925,14 +933,14 @@ function POSPageContent() {
 
         {/* Receipt Dialog */}
         <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
-            <DialogContent className="sm:max-w-xs">
+            <DialogContent className="sm:max-w-xs print:max-w-full print:border-none print:shadow-none">
                 <DialogHeader>
                    <DialogTitle className="sr-only">Sale Receipt</DialogTitle>
                 </DialogHeader>
                 <div ref={receiptRef}>
                     {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} />}
                 </div>
-                <DialogFooter className="flex-row justify-end gap-2">
+                <DialogFooter className="flex-row justify-end gap-2 print:hidden">
                     <Button variant="outline" onClick={() => handlePrint(receiptRef.current)}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                     <DialogClose asChild>
                       <Button onClick={() => setIsReceiptOpen(false)}>Close</Button>
