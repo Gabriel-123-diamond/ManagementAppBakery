@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -1955,22 +1954,32 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             if (transfer.status !== 'pending' && transfer.status !== 'pending_return') {
                 throw new Error("This transfer has already been processed.");
             }
-
+            
             if (action === 'decline') {
                 transaction.update(transferRef, { status: 'cancelled' });
-                // If it's a return that's declined, revert the original run's status
-                if (transfer.status === 'pending_return' && transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
-                    const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
-                    transaction.update(originalRunRef, { status: 'active' });
+                // If it's a return that's declined, revert the original run's status and stock
+                if (transfer.status === 'pending_return') {
+                    for (const item of transfer.items) {
+                        const staffStockRef = doc(db, 'staff', transfer.from_staff_id, 'personal_stock', item.productId);
+                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    }
+                    if (transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
+                        const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
+                        transaction.update(originalRunRef, { status: 'active' });
+                    }
                 }
                 return;
             }
 
             // --- Handle Accept ---
             if (transfer.status === 'pending_return') {
-                 // Acknowledge returned stock, add back to main inventory
                 for (const item of transfer.items) {
                     const productRef = doc(db, 'products', item.productId);
+                     // First, get the product document to ensure it exists before trying to update it.
+                    const productDoc = await transaction.get(productRef);
+                    if (!productDoc.exists()) {
+                        throw new Error(`Product with ID ${item.productId} not found.`);
+                    }
                     transaction.update(productRef, { stock: increment(item.quantity) });
                 }
 
@@ -1980,7 +1989,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     transaction.update(originalRunRef, { status: 'return_completed' });
                 }
                 
-                transaction.update(transferRef, { status: 'completed' }); // The return transfer itself is now completed.
+                transaction.update(transferRef, { status: 'completed' }); 
 
             } else if (transfer.notes?.startsWith('Return from production batch')) {
                 // Acknowledge stock from production
@@ -3317,4 +3326,3 @@ export async function returnUnusedIngredients(
         return { success: false, error: (error as Error).message };
     }
 }
-
