@@ -389,27 +389,6 @@ export async function handleInitiateTransfer(data: any, user: { staff_id: string
     }
 }
 
-
-export type DashboardStats = {
-    revenue: number;
-    customers: number;
-    sales: number;
-    activeOrders: number;
-    weeklyRevenue: { day: string, revenue: number }[];
-};
-
-export async function getDashboardStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly'): Promise<DashboardStats> {
-    // This function is now primarily handled by a real-time listener on the client.
-    // Kept for potential future use or for non-realtime stats.
-    return {
-        revenue: 0,
-        customers: 0,
-        sales: 0,
-        activeOrders: 0,
-        weeklyRevenue: [],
-    };
-}
-
 export type StaffDashboardStats = {
     personalStockCount: number;
     pendingTransfersCount: number;
@@ -1964,6 +1943,7 @@ export async function getCompletedTransfersForStaff(staffId: string): Promise<Tr
 export async function handleAcknowledgeTransfer(transferId: string, action: 'accept' | 'decline'): Promise<{success: boolean, error?: string}> {
     const transferRef = doc(db, 'transfers', transferId);
     
+    // Use a transaction for declining
     if (action === 'decline') {
         try {
             await runTransaction(db, async (transaction) => {
@@ -1972,7 +1952,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                 const transfer = transferDoc.data() as Transfer;
 
                 transaction.update(transferRef, { status: 'cancelled' });
-                if (transfer.originalRunId) {
+                if (transfer.originalRunId) { // If it was a return, reactivate the original run
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
                     transaction.update(originalRunRef, { status: 'active' });
                 }
@@ -1985,7 +1965,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
         }
     }
 
-    // Handle 'accept'
+    // Use a transaction for accepting
     try {
         await runTransaction(db, async (transaction) => {
             // --- READS FIRST ---
@@ -1999,16 +1979,12 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                  throw new Error("This transfer has already been processed.");
             }
 
-            const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
-            const staffStockRefs = transfer.items.map(item => doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId));
-            
-            const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-            const staffStockDocs = await Promise.all(staffStockRefs.map(ref => transaction.get(ref)));
-            
             // --- WRITES SECOND ---
+            // If it's a return of stock, add back to main inventory
             if (transfer.status === 'pending_return') {
-                for (let i = 0; i < transfer.items.length; i++) {
-                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
+                for (const item of transfer.items) {
+                    const productRef = doc(db, 'products', item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
                 if (transfer.originalRunId) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
@@ -2016,17 +1992,23 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                 }
                 transaction.update(transferRef, { status: 'completed' });
             } 
+            // If it's a transfer from production, add to main inventory
             else if (transfer.notes?.startsWith('Return from production batch')) {
-                 for (let i = 0; i < transfer.items.length; i++) {
-                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
+                for (const item of transfer.items) {
+                    const productRef = doc(db, 'products', item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
-                 transaction.update(transferRef, { 
+                transaction.update(transferRef, { 
                     status: 'completed',
                     time_received: serverTimestamp(),
                     time_completed: serverTimestamp() 
                 });
             }
+            // Standard transfer from store to staff
             else { 
+                const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
+                const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
                 for (let i = 0; i < transfer.items.length; i++) {
                     const item = transfer.items[i];
                     const productDoc = productDocs[i];
@@ -2034,13 +2016,14 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     if (!productDoc.exists() || (productDoc.data().stock || 0) < item.quantity) {
                         throw new Error(`Not enough stock for ${item.productName} in main inventory.`);
                     }
-
                     transaction.update(productRefs[i], { stock: increment(-item.quantity) });
                     
-                    if (staffStockDocs[i].exists()) {
-                        transaction.update(staffStockRefs[i], { stock: increment(item.quantity) });
+                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
+                    const staffStockDoc = await transaction.get(staffStockRef);
+                    if (staffStockDoc.exists()) {
+                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
                     } else {
-                        transaction.set(staffStockRefs[i], {
+                        transaction.set(staffStockRef, {
                             productId: item.productId,
                             productName: item.productName,
                             stock: item.quantity,
@@ -3365,6 +3348,7 @@ export async function returnUnusedIngredients(
     
 
     
+
 
 
 

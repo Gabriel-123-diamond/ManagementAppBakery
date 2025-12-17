@@ -41,7 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { RevenueChart } from '@/components/revenue-chart';
-import { checkForMissingIndexes, getDashboardStats, getStaffDashboardStats, getBakerDashboardStats, getShowroomDashboardStats } from '../actions';
+import { checkForMissingIndexes, getStaffDashboardStats, getBakerDashboardStats, getShowroomDashboardStats } from '../actions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,7 +142,6 @@ function ManagementDashboard() {
   const [revenueFilter, setRevenueFilter] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
 
   useEffect(() => {
-    setIsLoading(true);
     const ordersQuery = query(collection(db, "orders"));
 
     const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
@@ -211,7 +210,7 @@ function ManagementDashboard() {
           customers,
           weeklyRevenue: weeklyRevenueData
       }));
-      if(isLoading) setIsLoading(false);
+      if (isLoading) setIsLoading(false);
     });
 
     const handleStorageChange = () => {
@@ -235,7 +234,7 @@ function ManagementDashboard() {
         unsubscribe();
         window.removeEventListener('storage', handleStorageChange);
     };
-  }, [revenueFilter, isLoading]);
+  }, [revenueFilter]);
 
   
   const handleFilterChange = (filter: 'daily' | 'weekly' | 'monthly' | 'yearly') => {
