@@ -1947,59 +1947,59 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
     try {
         await runTransaction(db, async (transaction) => {
             const transferDoc = await transaction.get(transferRef);
-            if (!transferDoc.exists()) throw new Error("Transfer does not exist.");
-
+            if (!transferDoc.exists()) {
+                throw new Error("Transfer does not exist.");
+            }
             const transfer = transferDoc.data() as Transfer;
-            if (!['pending', 'pending_return'].includes(transfer.status)) {
+
+            if (transfer.status !== 'pending' && transfer.status !== 'pending_return') {
                 throw new Error("This transfer has already been processed.");
             }
 
             if (action === 'decline') {
                 transaction.update(transferRef, { status: 'cancelled' });
-                if (transfer.originalRunId) {
+                // If it's a return that's declined, revert the original run's status
+                if (transfer.status === 'pending_return' && transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
                     transaction.update(originalRunRef, { status: 'active' });
                 }
-                return; // End transaction for decline
+                return;
             }
-            
-            // Handle 'accept'
-            const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
-            const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
+            // --- Handle Accept ---
             if (transfer.status === 'pending_return') {
-                 for (let i = 0; i < productDocs.length; i++) {
-                    const productDoc = productDocs[i];
-                    if (!productDoc.exists()) throw new Error(`Product ${transfer.items[i].productName} not found.`);
-                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
+                 // Acknowledge returned stock, add back to main inventory
+                for (const item of transfer.items) {
+                    const productRef = doc(db, 'products', item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
-                if (transfer.originalRunId) {
+
+                // If it was a return from a specific sales run, mark that run as completed.
+                 if (transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
                     transaction.update(originalRunRef, { status: 'return_completed' });
                 }
-                transaction.update(transferRef, { status: 'completed' });
+                
+                transaction.update(transferRef, { status: 'completed' }); // The return transfer itself is now completed.
 
             } else if (transfer.notes?.startsWith('Return from production batch')) {
-                for (let i = 0; i < productDocs.length; i++) {
-                    const productDoc = productDocs[i];
-                    if (!productDoc.exists()) throw new Error(`Product ${transfer.items[i].productName} not found.`);
-                    transaction.update(productRefs[i], { stock: increment(transfer.items[i].quantity) });
+                // Acknowledge stock from production
+                for (const item of transfer.items) {
+                    const productRef = doc(db, 'products', item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
                 }
                 transaction.update(transferRef, { status: 'completed', time_received: serverTimestamp(), time_completed: serverTimestamp() });
-            } else { // Standard transfer to staff
-                for (let i = 0; i < productDocs.length; i++) {
-                    const productDoc = productDocs[i];
-                    if (!productDoc.exists() || (productDoc.data()?.stock || 0) < transfer.items[i].quantity) {
-                        throw new Error(`Not enough stock for ${transfer.items[i].productName} in main inventory.`);
-                    }
-                    transaction.update(productRefs[i], { stock: increment(-transfer.items[i].quantity) });
-                    
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', transfer.items[i].productId);
+            
+            } else { 
+                // Acknowledge a standard transfer TO staff
+                for (const item of transfer.items) {
+                    // This part is now just a formality as stock is already deducted
+                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
                     const staffStockDoc = await transaction.get(staffStockRef);
                     if (staffStockDoc.exists()) {
-                        transaction.update(staffStockRef, { stock: increment(transfer.items[i].quantity) });
+                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
                     } else {
-                        transaction.set(staffStockRef, { productId: transfer.items[i].productId, productName: transfer.items[i].productName, stock: transfer.items[i].quantity });
+                        transaction.set(staffStockRef, { productId: item.productId, productName: item.productName, stock: item.quantity });
                     }
                 }
 
@@ -2014,8 +2014,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
         return { success: true };
     } catch (error) {
         console.error("Error acknowledging transfer:", error);
-        const errorMessage = error instanceof Error ? error.message : `Failed to ${action} transfer.`;
-        return { success: false, error: errorMessage };
+        return { success: false, error: `Failed to ${action} transfer. ${(error as Error).message}` };
     }
 }
 
@@ -3318,3 +3317,4 @@ export async function returnUnusedIngredients(
         return { success: false, error: (error as Error).message };
     }
 }
+
