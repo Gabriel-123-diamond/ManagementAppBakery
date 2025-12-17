@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
 import Image from "next/image";
 import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -47,12 +47,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { collection, getDocs, doc, runTransaction, increment, getDoc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, doc, runTransaction, increment, getDoc, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { handlePosSale, initializePaystackTransaction, verifyPaystackOnServerAndFinalizeOrder, getProductsForStaff } from "@/app/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { User, CartItem, Product, CompletedOrder, SelectableStaff } from "./types";
-import type PaystackPop from '@paystack/inline-js';
 import { ProductEditDialog } from "@/app/dashboard/components/product-edit-dialog";
 
 
@@ -147,6 +146,75 @@ const handlePrint = (node: HTMLElement | null) => {
         printWindow.document.close();
     }
 };
+
+function CreateCustomerDialog({ onCustomerCreated, children }: { onCustomerCreated: (customer: Customer) => void, children: React.ReactNode }) {
+    const { toast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
+    const [address, setAddress] = useState('');
+    
+    const handleSave = async () => {
+        if (!name || !phone) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Customer name and phone number are required.'});
+            return;
+        }
+        
+        try {
+            const newCustomerRef = await addDoc(collection(db, "customers"), {
+                name,
+                phone,
+                email,
+                address,
+                joinedDate: new Date().toISOString(),
+                totalSpent: 0,
+                amountOwed: 0,
+                amountPaid: 0,
+            });
+            const newCustomer = { id: newCustomerRef.id, name, phone, email, address };
+            onCustomerCreated(newCustomer as User);
+            toast({ title: 'Success', description: 'New customer created.' });
+            setIsOpen(false);
+        } catch(error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to create new customer.'});
+        }
+    }
+
+    return (
+       <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>{children}</DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Create New Customer</DialogTitle>
+                    <DialogDescription>Add a new customer to your database. This will be saved permanently.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="create-customer-name">Customer Name</Label>
+                        <Input id="create-customer-name" value={name} onChange={e => setName(e.target.value)} required />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="create-customer-phone">Phone Number</Label>
+                        <Input id="create-customer-phone" value={phone} onChange={e => setPhone(e.target.value)} required />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="create-customer-email">Email (Optional)</Label>
+                        <Input id="create-customer-email" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="create-customer-address">Address (Optional)</Label>
+                        <Input id="create-customer-address" value={address} onChange={e => setAddress(e.target.value)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSave}>Create Customer</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
 
 function POSPageContent() {
   const { toast } = useToast();
@@ -284,15 +352,6 @@ function POSPageContent() {
         }
     };
   }, [selectedStaffId, fetchProductsForStaff])
-  
-  useEffect(() => {
-    if (isReceiptOpen && lastCompletedOrder) {
-      setTimeout(() => {
-        handlePrint(receiptRef.current);
-      }, 100);
-    }
-  }, [isReceiptOpen, lastCompletedOrder]);
-  
   
   const handleOfflinePayment = async (method: 'Cash' | 'POS') => {
     setIsConfirmOpen(false);
@@ -670,10 +729,12 @@ function POSPageContent() {
                                 <User className="mr-2 h-4 w-4" />
                                 Walk-in
                             </Button>
-                            <Button variant={customerType === 'registered' ? 'default' : 'outline'} onClick={() => setCustomerType('registered')}>
-                                <Building className="mr-2 h-4 w-4" />
-                                Registered
-                            </Button>
+                             <CreateCustomerDialog onCustomerCreated={(c) => {}}>
+                                <Button variant={customerType === 'registered' ? 'default' : 'outline'} onClick={() => setCustomerType('registered')}>
+                                    <Building className="mr-2 h-4 w-4" />
+                                    Registered
+                                </Button>
+                            </CreateCustomerDialog>
                         </div>
                         {customerType === 'walk-in' && (
                             <div className="space-y-1.5">
@@ -864,14 +925,14 @@ function POSPageContent() {
 
         {/* Receipt Dialog */}
         <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
-            <DialogContent className="sm:max-w-xs print:max-w-full print:border-none print:shadow-none">
+            <DialogContent className="sm:max-w-xs">
                 <DialogHeader>
                    <DialogTitle className="sr-only">Sale Receipt</DialogTitle>
                 </DialogHeader>
                 <div ref={receiptRef}>
                     {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} />}
                 </div>
-                <DialogFooter className="flex-row justify-end gap-2 print:hidden">
+                <DialogFooter className="flex-row justify-end gap-2">
                     <Button variant="outline" onClick={() => handlePrint(receiptRef.current)}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                     <DialogClose asChild>
                       <Button onClick={() => setIsReceiptOpen(false)}>Close</Button>

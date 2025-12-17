@@ -59,6 +59,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 
 type User = {
@@ -72,6 +73,7 @@ type Order = {
     total: number;
     date: Timestamp;
     customerId?: string;
+    customerName?: string;
 }
 
 type DashboardStats = {
@@ -140,6 +142,7 @@ function ManagementDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [missingIndexes, setMissingIndexes] = useState<string[]>([]);
   const [revenueFilter, setRevenueFilter] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [heldOrders] = useLocalStorage<any[][]>('heldOrders', []);
 
   useEffect(() => {
     const ordersQuery = query(collection(db, "orders"));
@@ -182,7 +185,11 @@ function ManagementDashboard() {
 
       const revenue = filteredOrders.reduce((sum, order) => sum + order.total, 0);
       const sales = filteredOrders.length;
-      const customers = new Set(filteredOrders.filter(o => o.customerId && o.customerId !== 'walk-in').map(o => o.customerId)).size;
+      
+      const customerNames = new Set(filteredOrders.map(o => o.customerName?.trim().toLowerCase()).filter(Boolean));
+      const registeredCustomers = new Set(filteredOrders.filter(o => o.customerId && o.customerId !== 'walk-in').map(o => o.customerId));
+      const customers = customerNames.size + registeredCustomers.size;
+
 
       // Calculate weekly revenue for the chart
       const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -203,38 +210,23 @@ function ManagementDashboard() {
         }
       });
       
-      setStats(prev => ({
-          ...prev,
+      setStats({
           revenue,
           sales,
           customers,
+          activeOrders: heldOrders.length,
           weeklyRevenue: weeklyRevenueData
-      }));
-      if (isLoading) setIsLoading(false);
+      });
+      setIsLoading(false);
     });
 
-    const handleStorageChange = () => {
-        const heldOrders = JSON.parse(localStorage.getItem('heldOrders') || '[]');
-        setStats(prev => ({ ...prev, activeOrders: heldOrders.length }));
-    };
-    
-    // Initial load for active orders
-    handleStorageChange();
-
-    window.addEventListener('storage', handleStorageChange);
-
-
-    // Check for missing indexes once
     checkForMissingIndexes().then(indexData => {
         setMissingIndexes(indexData.requiredIndexes);
     });
     
     // Cleanup listener on unmount
-    return () => {
-        unsubscribe();
-        window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [revenueFilter]);
+    return () => unsubscribe();
+  }, [revenueFilter, heldOrders]);
 
   
   const handleFilterChange = (filter: 'daily' | 'weekly' | 'monthly' | 'yearly') => {

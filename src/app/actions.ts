@@ -1943,29 +1943,6 @@ export async function getCompletedTransfersForStaff(staffId: string): Promise<Tr
 export async function handleAcknowledgeTransfer(transferId: string, action: 'accept' | 'decline'): Promise<{success: boolean, error?: string}> {
     const transferRef = doc(db, 'transfers', transferId);
     
-    // Use a transaction for declining
-    if (action === 'decline') {
-        try {
-            await runTransaction(db, async (transaction) => {
-                const transferDoc = await transaction.get(transferRef);
-                if (!transferDoc.exists()) throw new Error("Transfer does not exist.");
-                const transfer = transferDoc.data() as Transfer;
-
-                transaction.update(transferRef, { status: 'cancelled' });
-                if (transfer.originalRunId) { // If it was a return, reactivate the original run
-                    const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
-                    transaction.update(originalRunRef, { status: 'active' });
-                }
-            });
-            return { success: true };
-        } catch (error) {
-            console.error("Error declining transfer:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to decline transfer.";
-            return { success: false, error: errorMessage };
-        }
-    }
-
-    // Use a transaction for accepting
     try {
         await runTransaction(db, async (transaction) => {
             // --- READS FIRST ---
@@ -1979,10 +1956,18 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                  throw new Error("This transfer has already been processed.");
             }
 
-            // --- WRITES SECOND ---
-            // If it's a return of stock, add back to main inventory
+            if (action === 'decline') {
+                transaction.update(transferRef, { status: 'cancelled' });
+                if (transfer.originalRunId) {
+                    const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
+                    transaction.update(originalRunRef, { status: 'active' });
+                }
+                return; // End transaction here for decline
+            }
+            
+            // --- ACCEPT LOGIC ---
             if (transfer.status === 'pending_return') {
-                for (const item of transfer.items) {
+                 for (const item of transfer.items) {
                     const productRef = doc(db, 'products', item.productId);
                     transaction.update(productRef, { stock: increment(item.quantity) });
                 }
@@ -1991,9 +1976,8 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     transaction.update(originalRunRef, { status: 'return_completed' });
                 }
                 transaction.update(transferRef, { status: 'completed' });
-            } 
-            // If it's a transfer from production, add to main inventory
-            else if (transfer.notes?.startsWith('Return from production batch')) {
+
+            } else if (transfer.notes?.startsWith('Return from production batch')) {
                 for (const item of transfer.items) {
                     const productRef = doc(db, 'products', item.productId);
                     transaction.update(productRef, { stock: increment(item.quantity) });
@@ -2003,9 +1987,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     time_received: serverTimestamp(),
                     time_completed: serverTimestamp() 
                 });
-            }
-            // Standard transfer from store to staff
-            else { 
+            } else { 
                 const productRefs = transfer.items.map(item => doc(db, 'products', item.productId));
                 const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
@@ -2044,7 +2026,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
 
     } catch (error) {
         console.error("Error acknowledging transfer:", error);
-        const errorMessage = error instanceof Error ? error.message : "Failed to acknowledge transfer.";
+        const errorMessage = error instanceof Error ? error.message : `Failed to ${action} transfer.`;
         return { success: false, error: errorMessage };
     }
 }
@@ -2625,18 +2607,34 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
 
     try {
         await runTransaction(db, async (transaction) => {
-            for (const item of data.items) {
+            // --- READS ---
+            const stockChecks = data.items.map(item => {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
-                const stockDoc = await transaction.get(stockRef);
-                
+                return transaction.get(stockRef).then(stockDoc => ({
+                    stockRef,
+                    stockDoc,
+                    item,
+                }));
+            });
+
+            const salesDocId = format(orderDate, 'yyyy-MM-dd');
+            const salesDocRef = doc(db, 'sales', salesDocId);
+            const salesDocPromise = transaction.get(salesDocRef);
+
+            const allStockDocs = await Promise.all(stockChecks);
+            const salesDoc = await salesDocPromise;
+
+            // --- VALIDATION ---
+            for (const { stockDoc, item } of allStockDocs) {
                 if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
                     throw new Error(`Not enough stock for ${item.name}. Available: ${stockDoc.data()?.stock || 0}, trying to sell: ${item.quantity}`);
                 }
+            }
+
+            // --- WRITES ---
+            for (const { stockRef, item } of allStockDocs) {
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
-            
-            const salesDocId = format(orderDate, 'yyyy-MM-dd');
-            const salesDocRef = doc(db, 'sales', salesDocId);
             
             const orderData = {
                 id: newOrderRef.id,
@@ -2654,7 +2652,6 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             
             transaction.set(newOrderRef, orderData);
             
-            const salesDoc = await transaction.get(salesDocRef);
             const paymentField = data.paymentMethod === 'Cash' ? 'cash' : (data.paymentMethod === 'POS' ? 'pos' : 'transfer');
             
             if (salesDoc.exists()) {
@@ -3348,6 +3345,7 @@ export async function returnUnusedIngredients(
     
 
     
+
 
 
 
