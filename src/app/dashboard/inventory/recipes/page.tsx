@@ -386,7 +386,7 @@ function ProductionLogDetailsDialog({ log, isOpen, onOpenChange, user }: { log: 
             <div className="flex items-center gap-2"><strong>Action:</strong> <Badge>{log.action}</Badge></div>
             <p><strong>Staff Member:</strong> {log.staffName}</p>
             <p><strong>Details:</strong> {log.details}</p>
-            {batchDetails && user.role !== 'Baker' && (
+            {batchDetails && (
                  <>
                     <Separator className="my-4"/>
                     <h4 className="font-semibold text-base">Production Batch Details</h4>
@@ -867,6 +867,17 @@ export default function RecipesPage() {
             return total;
         }, 0);
     }
+    
+    const handleViewDetailsAction = (batch: ProductionBatch) => {
+        setViewingLog({
+            action: 'Batch Details',
+            details: `Details for batch ${batch.id}`,
+            staffId: batch.requestedById,
+            staffName: batch.requestedByName,
+            timestamp: batch.createdAt,
+            id: batch.id
+        });
+    }
 
     return (
         <div className="flex flex-col gap-4">
@@ -997,7 +1008,7 @@ export default function RecipesPage() {
                                         <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                         <TableBody>
                                             {section.batches.length > 0 ? section.batches.map(batch => (
-                                                <TableRow key={batch.id} onClick={() => { if(!isBaker) setViewingLog({ action: 'Batch Details', details: `Details for batch ${batch.id}`, staffId: batch.requestedById, staffName: batch.requestedByName, timestamp: batch.createdAt, id: batch.id })}} className={cn(!isBaker && "cursor-pointer")}>
+                                                <TableRow key={batch.id}>
                                                     <TableCell>{format(new Date(batch.createdAt), 'Pp')}</TableCell>
                                                     <TableCell>{batch.recipeName}</TableCell>
                                                     <TableCell>{batch.requestedByName}</TableCell>
@@ -1011,6 +1022,11 @@ export default function RecipesPage() {
                                                         )}
                                                         {batch.status === 'in_production' && canCompleteBatches && (
                                                             <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} />
+                                                        )}
+                                                        {(batch.status === 'completed' || batch.status === 'declined' || batch.status === 'cancelled') && (
+                                                            <Button size="sm" variant="outline" onClick={() => handleViewDetailsAction(batch)}>
+                                                                <Eye className="mr-2 h-4 w-4" /> View Details
+                                                            </Button>
                                                         )}
                                                     </TableCell>
                                                 </TableRow>
@@ -1062,13 +1078,13 @@ export default function RecipesPage() {
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Staff</TableHead><TableHead>Action</TableHead><TableHead>Details</TableHead><TableHead>View</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                      {paginatedLogs.length > 0 ? paginatedLogs.map(log => (
-                                        <TableRow key={log.id} className="cursor-pointer" onClick={() => setViewingLog(log)}>
+                                        <TableRow key={log.id}>
                                             <TableCell>{log.timestamp ? format(new Date(log.timestamp), 'Pp') : 'N/A'}</TableCell>
                                             <TableCell>{log.staffName}</TableCell>
                                             <TableCell><Badge>{log.action}</Badge></TableCell>
                                             <TableCell className="max-w-[300px] truncate">{log.details}</TableCell>
                                             <TableCell>
-                                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setViewingLog(log); }}>
+                                                <Button variant="ghost" size="icon" onClick={() => setViewingLog(log)}>
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>
