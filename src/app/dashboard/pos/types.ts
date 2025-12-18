@@ -26,7 +26,7 @@ export type CompletedOrder = {
   tax: number;
   total: number;
   date: string; // Changed to string to ensure consistency
-  paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit';
+  paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit' | 'Split';
   customerName?: string;
   status: 'Completed' | 'Pending' | 'Cancelled';
 };
@@ -44,4 +44,12 @@ export type SelectableStaff = {
     role: string;
 };
 
+export type PaymentMethod = 'Cash' | 'POS' | 'Paystack';
+
+export type PartialPayment = {
+    id: number;
+    method: PaymentMethod | '';
+    amount: number;
+    confirmed: boolean;
+};
     

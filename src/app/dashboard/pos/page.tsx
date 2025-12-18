@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
 import Image from "next/image";
-import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit } from "lucide-react";
+import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit, FileSignature, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,13 +50,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { collection, getDocs, doc, runTransaction, increment, getDoc, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { handlePosSale, initializePaystackTransaction, verifyPaystackOnServerAndFinalizeOrder, getProductsForStaff } from "@/app/actions";
+import { handlePosSale, initializePaystackTransaction, verifyPaystackOnServerAndFinalizeOrder } from "@/app/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { User, CartItem, Product, CompletedOrder, SelectableStaff } from "./types";
+import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment } from "./types";
 import { ProductEditDialog } from "@/app/dashboard/components/product-edit-dialog";
 
 
-const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeAddress?: string }>(({ order, storeAddress }, ref) => {
+const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeAddress?: string, partialPayments?: PartialPayment[] }>(({ order, storeAddress, partialPayments }, ref) => {
     return (
         <div ref={ref} className="p-2">
             <div className="text-center mb-4">
@@ -91,6 +91,18 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
                     </TableBody>
                 </Table>
                 <Separator className="my-2"/>
+                 {partialPayments && partialPayments.length > 1 && (
+                    <div className="w-full space-y-1 text-sm pr-1">
+                        <h3 className="font-semibold">Payment Details:</h3>
+                        {partialPayments.map((p, index) => (
+                            <div key={index} className="flex justify-between">
+                                <span>{p.method}:</span>
+                                <span>₦{p.amount.toFixed(2)}</span>
+                            </div>
+                        ))}
+                         <Separator className="my-2"/>
+                    </div>
+                )}
                 <div className="w-full space-y-1 pr-1">
                     <div className="flex justify-between font-bold text-base mt-1">
                         <span>Total</span>
@@ -108,43 +120,39 @@ Receipt.displayName = 'Receipt';
 
 const handlePrint = (node: HTMLElement | null) => {
     if (!node) return;
+
+    const content = node.innerHTML;
     const printWindow = window.open('', '_blank', 'width=320,height=500');
+    
     if (printWindow) {
-        const receiptContent = node.innerHTML;
-        const printableContent = `
+        printWindow.document.write(`
             <html>
                 <head>
                     <title>Receipt</title>
                     <style>
                         @media print {
-                            @page {
-                                margin: 0;
-                                size: 80mm auto;
-                            }
-                            body { 
-                                font-family: sans-serif; 
-                                margin: 0;
-                                -webkit-print-color-adjust: exact;
-                                print-color-adjust: exact;
-                            }
+                            @page { margin: 0; size: 80mm auto; }
+                            body { font-family: sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                         }
                     </style>
                 </head>
                 <body>
-                    ${receiptContent}
+                    ${content}
                     <script>
                         window.onload = function() {
                             window.print();
-                            window.onafterprint = function() {
+                            // Use a timeout to ensure the print dialog has time to open before we close the window
+                            setTimeout(function() {
                                 window.close();
-                            };
+                            }, 500);
                         };
                     </script>
                 </body>
             </html>
-        `;
-        printWindow.document.write(printableContent);
+        `);
         printWindow.document.close();
+    } else {
+        alert('Please allow popups for this website');
     }
 };
 
@@ -223,16 +231,15 @@ function POSPageContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [cart, setCart] = useLocalStorage<CartItem[]>('posCart', []);
-  const [heldOrders, setHeldOrders] = useLocalStorage<CartItem[][]>('heldOrders', []);
+  const [heldOrders, setHeldOrders] = useLocalStorage<(CartItem[] & { partialPayments?: PartialPayment[] })[][]>('heldOrders', []);
   const [activeTab, setActiveTab] = useState('All');
   const [customerType, setCustomerType] = useState<'walk-in' | 'registered'>('walk-in');
   const [customerName, setCustomerName] = useLocalStorage('posCustomerName', '');
   const [customerEmail, setCustomerEmail] = useLocalStorage('posCustomerEmail', '');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastCompletedOrder, setLastCompletedOrder] = useState<CompletedOrder | null>(null);
+  const [lastPartialPayments, setLastPartialPayments] = useState<PartialPayment[]>([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [confirmMethod, setConfirmMethod] = useState<'Cash' | 'POS' | null>(null);
   const [storeAddress, setStoreAddress] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -255,7 +262,8 @@ function POSPageContent() {
   const fetchProductsForStaff = useCallback(async (staffId: string) => {
     setIsLoadingProducts(true);
     
-    return onSnapshot(collection(db, 'staff', staffId, 'personal_stock'), async (stockSnapshot) => {
+    // This now returns the unsubscribe function
+    const unsub = onSnapshot(collection(db, 'staff', staffId, 'personal_stock'), async (stockSnapshot) => {
         if (stockSnapshot.empty) {
             setProducts([]);
             setIsLoadingProducts(false);
@@ -294,6 +302,7 @@ function POSPageContent() {
         setProducts(productsList);
         setIsLoadingProducts(false);
     });
+    return unsub;
   }, []);
 
   const clearCartAndStorage = useCallback(() => {
@@ -302,8 +311,9 @@ function POSPageContent() {
     setCustomerEmail('');
   }, [setCart, setCustomerName, setCustomerEmail]);
   
-  const handleSaleMade = useCallback((order: CompletedOrder) => {
+  const handleSaleMade = useCallback((order: CompletedOrder, partialPayments: PartialPayment[] = []) => {
       setLastCompletedOrder(order);
+      setLastPartialPayments(partialPayments);
       setIsReceiptOpen(true);
       clearCartAndStorage();
       setPaymentStatus('idle');
@@ -335,7 +345,7 @@ function POSPageContent() {
       }
     };
     initializePos();
-  }, [selectedStaffId]);
+  }, []);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
@@ -353,27 +363,75 @@ function POSPageContent() {
         }
     };
   }, [selectedStaffId, fetchProductsForStaff])
-  
-  const handleOfflinePayment = async (method: 'Cash' | 'POS') => {
-    setIsConfirmOpen(false);
+
+  const handleFinalizeSplitOrder = async (payments: PartialPayment[]) => {
     setPaymentStatus('processing');
+    if (!user || !selectedStaffId) {
+        toast({ variant: 'destructive', title: 'Error', description: "User or operating staff not identified." });
+        setPaymentStatus('failed');
+        return;
+    }
+
+    const itemsWithCost = cart.map(item => {
+        const productDetails = products.find(p => p.id === item.id);
+        return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
+    });
+
+    const staffDoc = await getDoc(doc(db, "staff", selectedStaffId));
+    const staffName = staffDoc.exists() ? staffDoc.data().name : 'Unknown';
+
+    const saleData = {
+        items: itemsWithCost,
+        total: total,
+        paymentMethod: 'Split' as 'Split',
+        partialPayments: payments,
+        customerName: customerName || 'Walk-in',
+        staffId: selectedStaffId,
+        staffName: staffName,
+        date: new Date().toISOString()
+    };
+    
+    const result = await handlePosSale(saleData);
+
+    if (result.success && result.orderId) {
+        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
+        const completedOrder: CompletedOrder = {
+            id: result.orderId,
+            items: cart,
+            total: total,
+            date: new Date().toISOString(),
+            paymentMethod: 'Split',
+            customerName: customerName || 'Walk-in',
+            status: 'Completed',
+            subtotal, tax: 0
+        };
+        handleSaleMade(completedOrder, payments);
+        toast({ title: 'Sale Recorded', description: 'Split payment order has been successfully recorded.' });
+    } else {
+        toast({ variant: "destructive", title: "Order Failed", description: result.error || "Could not complete the sale." });
+        setPaymentStatus('failed');
+    }
+}
+  
+  const handleSinglePayment = async (method: 'Cash' | 'POS' | 'Paystack') => {
     setIsCheckoutOpen(false);
+    if (method === 'Paystack') {
+        handlePaystackPayment();
+        return;
+    }
+    
+    setPaymentStatus('processing');
 
     if (!user || !selectedStaffId) {
-        toast({ variant: "destructive", title: "Error", description: "User or operating staff not identified. Cannot complete order." });
+        toast({ variant: "destructive", title: "Error", description: "User or operating staff not identified." });
         setPaymentStatus('idle');
         return;
     }
     
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
-        return {
-            productId: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-            costPrice: productDetails?.costPrice || 0
-        };
+        return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
     });
 
     const staffDoc = await getDoc(doc(db, "staff", selectedStaffId));
@@ -392,58 +450,44 @@ function POSPageContent() {
     const result = await handlePosSale(saleData);
 
     if (result.success && result.orderId) {
+        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
-            total: total,
+            total,
             date: new Date().toISOString(),
             paymentMethod: method,
             customerName: customerName || 'Walk-in',
             status: 'Completed',
-            subtotal: 0, // Placeholder
-            tax: 0, // Placeholder
+            subtotal, tax: 0
         };
         handleSaleMade(completedOrder);
         toast({ title: 'Sale Recorded', description: 'Order has been successfully recorded.' });
     } else {
-         toast({
-            variant: "destructive",
-            title: "Order Failed",
-            description: result.error || "Could not complete the sale.",
-        });
-        setPaymentStatus('idle');
+        toast({ variant: "destructive", title: "Order Failed", description: result.error || "Could not complete the sale." });
+        setPaymentStatus('failed');
     }
   }
 
   const handlePaystackPayment = async () => {
     if (!user || !selectedStaffId) return;
 
-    const selectedStaff = allStaff.find(s => s.staff_id === selectedStaffId) || user;
-    if (!selectedStaff) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not identify the operating staff member.'});
-        return;
-    }
-
     setPaymentStatus('processing');
-    setIsCheckoutOpen(false);
-
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
-        return {
-            productId: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-            costPrice: productDetails?.costPrice || 0,
-        };
+        return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
     });
+
+    const staffDoc = await getDoc(doc(db, "staff", selectedStaffId));
+    const staffName = staffDoc.exists() ? staffDoc.data().name : 'Unknown';
 
     const initResult = await initializePaystackTransaction({
         email: customerEmail || user.email,
         total: total,
         customerName: customerName || 'Walk-in',
         staffId: selectedStaffId,
-        staffName: selectedStaff.name,
+        staffName,
         items: itemsWithCost,
         isPosSale: true,
         isDebtPayment: false,
@@ -459,9 +503,10 @@ function POSPageContent() {
             amount: Math.round(total * 100),
             ref: initResult.reference,
             onSuccess: async (transaction) => {
-                setPaymentStatus('processing'); // Keep it processing during verification
+                setPaymentStatus('processing');
                 const verifyResult = await verifyPaystackOnServerAndFinalizeOrder(transaction.reference);
                 if (verifyResult.success && verifyResult.orderId) {
+                     const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
                     const completedOrder: CompletedOrder = {
                         id: verifyResult.orderId,
                         items: cart,
@@ -470,20 +515,19 @@ function POSPageContent() {
                         paymentMethod: 'Paystack',
                         customerName: customerName || 'Walk-in',
                         status: 'Completed',
-                        subtotal: 0, // Placeholder
-                        tax: 0, // Placeholder
+                        subtotal, tax: 0
                     };
                     handleSaleMade(completedOrder);
                     toast({ title: "Payment Successful", description: "Order has been verified and completed." });
                     setPaymentStatus('success');
                 } else {
-                    toast({ variant: "destructive", title: "Verification Failed", description: verifyResult.error || "Could not verify payment. Please contact support." });
+                    toast({ variant: "destructive", title: "Verification Failed", description: verifyResult.error || "Could not verify payment." });
                     setPaymentStatus('failed');
                 }
             },
             onClose: () => {
                 if (paymentStatus !== 'success') {
-                    toast({ variant: "destructive", title: "Payment Cancelled", description: "The payment window was closed." });
+                    toast({ variant: "destructive", title: "Payment Cancelled" });
                     setPaymentStatus('cancelled');
                 }
             }
@@ -511,11 +555,7 @@ function POSPageContent() {
   const addToCart = (product: Product) => {
     const productInStock = products.find(p => p.id === product.id);
     if (!productInStock || productInStock.stock === 0) {
-      toast({
-        variant: "destructive",
-        title: "Out of Stock",
-        description: `${product.name} is currently unavailable in this inventory.`,
-      });
+      toast({ variant: "destructive", title: "Out of Stock", description: `${product.name} is currently unavailable.` });
       return;
     };
     
@@ -526,13 +566,9 @@ function POSPageContent() {
             toast({ variant: "destructive", title: "Stock Limit Reached", description: `Cannot add more ${product.name}.` });
             return prevCart;
         }
-        return prevCart.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1, price: productInStock.price, costPrice: productInStock.costPrice } // Always update price & costPrice
-            : item
-        );
+        return prevCart.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1, price: productInStock.price } : item);
       }
-      return [...prevCart, { id: product.id, name: product.name, price: product.price, quantity: 1, costPrice: productInStock.costPrice }];
+      return [...prevCart, { id: product.id, name: product.name, price: product.price, quantity: 1 }];
     });
   };
 
@@ -543,45 +579,33 @@ function POSPageContent() {
       }
       const productInStock = products.find(p => p.id === productId);
       if (productInStock && newQuantity > productInStock.stock) {
-        toast({ variant: "destructive", title: "Stock Limit Reached", description: `Only ${productInStock.stock} units of ${productInStock.name} available.` });
+        toast({ variant: "destructive", title: "Stock Limit Reached", description: `Only ${productInStock.stock} units available.` });
         return prevCart.map((item) => item.id === productId ? { ...item, quantity: productInStock.stock } : item);
       }
-      return prevCart.map((item) =>
-        item.id === productId ? { ...item, quantity: newQuantity } : item
-      );
+      return prevCart.map((item) => item.id === productId ? { ...item, quantity: newQuantity } : item);
     });
   };
   
   const clearCart = () => {
     if (cart.length === 0) return;
     clearCartAndStorage();
-    toast({
-        title: "Cart Cleared",
-        description: "All items have been removed from the cart.",
-    });
+    toast({ title: "Cart Cleared", description: "All items have been removed." });
   };
 
   const holdOrder = () => {
     if (cart.length === 0) return;
     setHeldOrders(prev => [...prev, cart]);
     clearCartAndStorage();
-     toast({
-        title: "Order Held",
-        description: "The current cart has been saved.",
-    });
+    toast({ title: "Order Held", description: "The current cart has been saved." });
   }
 
   const resumeOrder = (orderIndex: number) => {
     if (cart.length > 0) {
-       toast({
-        variant: "destructive",
-        title: "Cart is not empty",
-        description: "Please clear or complete the current order before resuming another.",
-      });
+       toast({ variant: "destructive", title: "Cart is not empty", description: "Please clear or complete the current order before resuming." });
       return;
     }
     const orderToResume = heldOrders[orderIndex];
-    setCart(orderToResume);
+    setCart(orderToResume as any);
     setHeldOrders(prev => prev.filter((_, index) => index !== orderIndex));
     setActiveTab('All');
   }
@@ -592,7 +616,10 @@ function POSPageContent() {
   }
 
   const selectedStaffName = allStaff.find(s => s.staff_id === selectedStaffId)?.name || user?.name;
-
+  
+  if (!hasMounted) {
+    return <div className="flex justify-center items-center h-full"><Loader2 className="h-16 w-16 animate-spin" /></div>;
+  }
 
   return (
      <>
@@ -706,7 +733,7 @@ function POSPageContent() {
                            <Card key={index} className="p-2 flex justify-between items-center">
                               <div>
                                 <p className="font-semibold">Held Order #{index + 1}</p>
-                                <p className="text-sm text-muted-foreground">{heldCart.length} items - Total: ₦{heldCart.reduce((acc, item) => acc + item.price * item.quantity, 0).toFixed(2)}</p>
+                                <p className="text-sm text-muted-foreground">{heldCart.length} items - Total: ₦{heldCart.reduce((acc: any, item: any) => acc + item.price * item.quantity, 0).toFixed(2)}</p>
                               </div>
                               <Button size="sm" onClick={() => resumeOrder(index)}>Resume</Button>
                            </Card>
@@ -892,48 +919,35 @@ function POSPageContent() {
                         Total Amount: <span className="font-bold text-foreground">₦{total.toFixed(2)}</span>
                     </DialogDescription>
                 </DialogHeader>
-                 <div className="flex flex-col gap-4 py-4">
-                    <Button type="button" variant="outline" className="h-20 text-lg w-full" onClick={() => { setIsCheckoutOpen(false); setConfirmMethod('Cash'); setIsConfirmOpen(true); } }>
+                 <div className="grid grid-cols-1 gap-4 py-4">
+                    <Button type="button" variant="outline" className="h-20 text-lg w-full" onClick={() => handleSinglePayment('Cash')}>
                         <Wallet className="mr-2 h-6 w-6" />
                         Pay with Cash
                     </Button>
-                    <Button type="button" variant="outline" className="h-20 text-lg w-full" onClick={() => { setIsCheckoutOpen(false); setConfirmMethod('POS'); setIsConfirmOpen(true); } }>
+                    <Button type="button" variant="outline" className="h-20 text-lg w-full" onClick={() => handleSinglePayment('POS')}>
                         <CreditCard className="mr-2 h-6 w-6" />
                         Pay with POS
                     </Button>
-                    <Button className="h-20 text-lg w-full font-bold bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handlePaystackPayment}>
+                    <Button className="h-20 text-lg w-full font-bold bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => handleSinglePayment('Paystack')}>
                         <ArrowRightLeft className="mr-2 h-6 w-6"/>
                         Pay with Paystack
+                    </Button>
+                    <Separator className="my-2"/>
+                    <Button variant="secondary" className="w-full h-12" onClick={() => { setIsCheckoutOpen(false); }}>
+                        <FileSignature className="mr-2 h-5 w-5"/>
+                        Split Payment
                     </Button>
                 </div>
             </DialogContent>
         </Dialog>
         
-        {/* Cash/POS Confirmation Dialog */}
-        <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Confirm {confirmMethod} Payment</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Have you received <strong>₦{total.toFixed(2)}</strong> via {confirmMethod}? This action will finalize the order and log it for necessary approvals.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setConfirmMethod(null)}>No, Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleOfflinePayment(confirmMethod!)}>Yes, I've received it</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-
         {/* Receipt Dialog */}
         <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
             <DialogContent className="sm:max-w-xs print:max-w-full print:border-none print:shadow-none">
                 <DialogHeader>
                    <DialogTitle className="sr-only">Sale Receipt</DialogTitle>
                 </DialogHeader>
-                <div ref={receiptRef}>
-                    {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} />}
-                </div>
+                {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} partialPayments={lastPartialPayments} ref={receiptRef} />}
                 <DialogFooter className="flex-row justify-end gap-2 print:hidden">
                     <Button variant="outline" onClick={() => handlePrint(receiptRef.current)}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                     <DialogClose asChild>
