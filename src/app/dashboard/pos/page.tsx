@@ -224,6 +224,208 @@ function CreateCustomerDialog({ onCustomerCreated, children }: { onCustomerCreat
     )
 }
 
+function SplitPaymentDialog({
+  isOpen,
+  onOpenChange,
+  total,
+  onFinalize,
+  onHold,
+}: {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  total: number
+  onFinalize: (payments: PartialPayment[]) => void
+  onHold: (cart: CartItem[], payments: PartialPayment[]) => void
+}) {
+  const [payments, setPayments] = useState<PartialPayment[]>([
+    { id: 1, method: '', amount: total, confirmed: false },
+  ])
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const totalPaid = payments.reduce(
+    (acc, p) => acc + (p.confirmed ? Number(p.amount) : 0),
+    0
+  )
+  const remainingTotal = total - totalPaid
+  const allConfirmed = remainingTotal <= 0 && payments.every(p => p.confirmed || p.amount === 0)
+
+
+  const handleMethodChange = (id: number, method: PaymentMethod | '') => {
+    setPayments(
+      payments.map((p) => (p.id === id ? { ...p, method } : p))
+    )
+  }
+
+  const handleAmountChange = (id: number, amountStr: string) => {
+    const newAmount = parseFloat(amountStr) || 0;
+    
+    // Validation
+    const otherPaymentsTotal = payments.filter(p => p.id !== id && !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
+    const availableToAllocate = remainingTotal - otherPaymentsTotal;
+    
+    if (newAmount > availableToAllocate && availableToAllocate > 0) {
+        toast({ variant: 'destructive', title: 'Invalid Amount', description: `Amount cannot exceed remaining balance of ₦${availableToAllocate.toFixed(2)}` });
+        return; // Or cap the amount
+    }
+
+    setPayments(prevPayments => {
+        let newPayments = prevPayments.map(p => p.id === id ? { ...p, amount: newAmount } : p);
+
+        const unconfirmedUnedited = newPayments.filter(p => !p.confirmed && p.id !== id);
+        const currentTotal = newPayments.filter(p => !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
+        const remainingToDistribute = remainingTotal - currentTotal + (prevPayments.find(p => p.id === id)?.amount || 0) - newAmount;
+
+        if (unconfirmedUnedited.length > 0) {
+            const amountPerField = remainingToDistribute / unconfirmedUnedited.length;
+             newPayments = newPayments.map(p => {
+                if (!p.confirmed && p.id !== id) {
+                    return { ...p, amount: Number(p.amount) + amountPerField };
+                }
+                return p;
+            });
+        }
+        return newPayments;
+    });
+};
+
+  const addPaymentMethod = () => {
+    if (remainingTotal <= 0) {
+        toast({variant: 'destructive', title: "Balance Cleared", description: "The total amount has already been paid."});
+        return;
+    }
+    setPayments([
+      ...payments,
+      { id: Date.now(), method: '', amount: 0, confirmed: false },
+    ])
+  }
+
+  const removePaymentMethod = (id: number) => {
+    setPayments(payments.filter((p) => p.id !== id))
+  }
+
+  const confirmPayment = (id: number) => {
+    setPayments(
+      payments.map((p) => (p.id === id ? { ...p, confirmed: true } : p))
+    )
+  }
+
+  const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack']
+  const usedMethods = payments.map((p) => p.method)
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Split Payment</DialogTitle>
+          <DialogDescription>
+            Total Amount:{" "}
+            <span className="font-bold text-foreground">
+              ₦{total.toFixed(2)}
+            </span>
+            <br />
+            Remaining:{" "}
+            <span className="font-bold text-destructive">
+              ₦{remainingTotal.toFixed(2)}
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          {payments.map((payment) => (
+            <div
+              key={payment.id}
+              className="grid grid-cols-[1fr_120px_auto_auto] items-center gap-2"
+            >
+              <Select
+                value={payment.method}
+                onValueChange={(value: PaymentMethod | '') =>
+                  handleMethodChange(payment.id, value)
+                }
+                disabled={payment.confirmed}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Method..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMethods.map((method) => (
+                    <SelectItem
+                      key={method}
+                      value={method}
+                      disabled={usedMethods.includes(method) && payment.method !== method}
+                    >
+                      {method}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                placeholder="Amount"
+                value={payment.amount}
+                onChange={(e) => handleAmountChange(payment.id, e.target.value)}
+                disabled={payment.confirmed}
+              />
+               <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                         <Button
+                            size="icon"
+                            variant="ghost"
+                            disabled={payment.confirmed || !payment.method || !payment.amount}
+                        >
+                            <Check className="h-4 w-4" />
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
+                            <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => removePaymentMethod(payment.id)}
+                disabled={payment.confirmed}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            onClick={addPaymentMethod}
+            disabled={allConfirmed}
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Payment Method
+          </Button>
+        </div>
+        <DialogFooter className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => onHold([], payments)} disabled={allConfirmed}>
+                <Hand className="mr-2 h-4 w-4" /> Hold Order
+            </Button>
+             <Button
+                onClick={() => onFinalize(payments)}
+                disabled={!allConfirmed}
+            >
+                {isSubmitting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                )}
+                Finalize Sale
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function POSPageContent() {
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
@@ -372,8 +574,6 @@ function POSPageContent() {
         return;
     }
 
-    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
         return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
@@ -386,7 +586,6 @@ function POSPageContent() {
         items: itemsWithCost,
         total: total,
         paymentMethod: 'Split' as 'Split',
-        partialPayments: payments,
         customerName: customerName || 'Walk-in',
         staffId: selectedStaffId,
         staffName: staffName,
@@ -396,6 +595,7 @@ function POSPageContent() {
     const result = await handlePosSale(saleData);
 
     if (result.success && result.orderId) {
+        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
@@ -429,8 +629,6 @@ function POSPageContent() {
         return;
     }
     
-    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
         return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
@@ -452,6 +650,7 @@ function POSPageContent() {
     const result = await handlePosSale(saleData);
 
     if (result.success && result.orderId) {
+        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
@@ -594,9 +793,11 @@ function POSPageContent() {
     toast({ title: "Cart Cleared", description: "All items have been removed." });
   };
 
-  const holdOrder = () => {
+  const holdOrder = (partialPayments: PartialPayment[] = []) => {
     if (cart.length === 0) return;
-    setHeldOrders(prev => [...prev, cart]);
+    const orderToHold = [...cart];
+    (orderToHold as any).partialPayments = partialPayments;
+    setHeldOrders(prev => [...prev, [orderToHold]]);
     clearCartAndStorage();
     toast({ title: "Order Held", description: "The current cart has been saved." });
   }
@@ -842,7 +1043,7 @@ function POSPageContent() {
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 w-full">
-                        <Button variant="outline" onClick={holdOrder} disabled={cart.length === 0 || !selectedStaffId || paymentStatus === 'processing'}>
+                        <Button variant="outline" onClick={() => holdOrder()} disabled={cart.length === 0 || !selectedStaffId || paymentStatus === 'processing'}>
                             <Hand /> Hold
                         </Button>
                         <AlertDialog>
@@ -973,6 +1174,21 @@ function POSPageContent() {
             </DialogContent>
         </Dialog>
         
+        <SplitPaymentDialog 
+            isOpen={isSplitPaymentOpen}
+            onOpenChange={setIsSplitPaymentOpen}
+            total={total}
+            onFinalize={handleFinalizeSplitOrder}
+            onHold={(cart, payments) => {
+                const heldCart = [...cart];
+                (heldCart as any).partialPayments = payments;
+                 setHeldOrders(prev => [...prev, [heldCart]]);
+                clearCartAndStorage();
+                setIsSplitPaymentOpen(false);
+                toast({ title: "Order Held", description: "The current cart and its partial payments have been saved." });
+            }}
+        />
+
         {/* Receipt Dialog */}
         <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
             <DialogContent className="sm:max-w-xs print:max-w-full print:border-none print:shadow-none">
