@@ -2888,7 +2888,7 @@ export async function getStaffByRole(role: string): Promise<any[]> {
 }
 
 export async function initializePaystackTransaction(data: any): Promise<{ success: boolean; error?: string, reference?: string }> {
-    const secretKey = process.env.NEXT_PUBLIC_PAYSTACK_SECRET_KEY;
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
     if (!secretKey) return { success: false, error: "Paystack secret key is not configured." };
     
     try {
