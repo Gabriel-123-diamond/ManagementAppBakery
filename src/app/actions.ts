@@ -2490,12 +2490,17 @@ export async function getOrdersForRun(runId: string): Promise<any[]> {
     }
 }
 
+type PartialPayment = {
+    method: 'Cash' | 'POS';
+    amount: number;
+}
 type SaleData = {
     runId: string;
     items: { productId: string; quantity: number; price: number, name: string }[];
     customerId: string;
     customerName: string;
-    paymentMethod: 'Cash' | 'Credit' | 'Paystack' | 'POS';
+    paymentMethod: 'Cash' | 'Credit' | 'POS' | 'Split';
+    partialPayments?: PartialPayment[];
     staffId: string;
     total: number;
 }
@@ -2529,7 +2534,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             }
 
             const driverName = staffDoc.data()?.name || 'Unknown';
-            const isPendingApproval = ['Cash', 'POS'].includes(data.paymentMethod);
+            const isPendingApproval = ['Cash', 'POS', 'Split'].includes(data.paymentMethod);
             const isCreditSale = data.paymentMethod === 'Credit';
             
             const newOrderRef = doc(collection(db, 'orders'));
@@ -2540,6 +2545,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 items: data.items,
                 total: data.total,
                 paymentMethod: data.paymentMethod,
+                partialPayments: data.partialPayments || null,
                 date: Timestamp.now(),
                 staffId: data.staffId,
                 staffName: driverName,
@@ -2573,8 +2579,6 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     paymentMethod: data.paymentMethod,
                     isDebtPayment: false,
                 });
-            } else { // Direct payments like Paystack
-                // Paystack payments are verified on the server and do not directly update totalCollected here.
             }
 
             return newOrderRef.id;
@@ -2589,14 +2593,10 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
 }
 
 
-type PartialPayment = {
-    method: 'Cash' | 'POS' | 'Paystack' | '';
-    amount: number;
-}
 type PosSaleData = {
     items: { productId: string; quantity: number; price: number, name: string, costPrice: number }[];
     customerName: string;
-    paymentMethod: 'Cash' | 'POS' | 'Paystack' | 'Split';
+    paymentMethod: 'Cash' | 'POS' | 'Split';
     partialPayments?: PartialPayment[];
     staffId: string;
     staffName: string;

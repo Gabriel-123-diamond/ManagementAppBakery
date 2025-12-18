@@ -34,6 +34,10 @@ type Customer = {
   email: string;
 };
 
+type PartialPayment = {
+    method: 'Cash' | 'POS';
+    amount: number;
+}
 type OrderItem = { productId: string; quantity: number, price: number, name: string, costPrice?: number, minPrice?: number, maxPrice?: number };
 
 type CompletedOrder = {
@@ -41,7 +45,8 @@ type CompletedOrder = {
   items: OrderItem[];
   total: number;
   date: Date;
-  paymentMethod: 'Paystack' | 'Cash' | 'Credit' | 'POS';
+  paymentMethod: 'POS' | 'Cash' | 'Credit' | 'Split';
+  partialPayments?: { method: string, amount: number }[];
   customerName?: string;
   subtotal: number;
   tax: number;
@@ -270,11 +275,12 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [cart, setCart] = useState<OrderItem[]>([]);
-    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Credit' | 'Paystack' | 'POS'>('Cash');
+    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Credit' | 'POS'>('Cash');
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [customerType, setCustomerType] = useState<'walk-in' | 'registered'>('walk-in');
     const [selectedCustomerId, setSelectedCustomerId] = useState<string>('walk-in');
     const [customerName, setCustomerName] = useState('');
+    const [isSplitPaymentOpen, setIsSplitPaymentOpen] = useState(false);
 
     const fetchCustomers = useCallback(() => {
         getDocs(collection(db, 'customers')).then(snap => {
@@ -343,7 +349,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
 
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
-    const handleSubmit = async () => {
+    const handleSubmit = async (partialPayments?: PartialPayment[]) => {
         if (!user || cart.length === 0 || (paymentMethod === 'Credit' && selectedCustomerId === 'walk-in')) {
             toast({ variant: 'destructive', title: 'Error', description: 'Please add items to cart and select a registered customer for credit sales.' });
             return;
@@ -357,11 +363,12 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
             items: cart.map(item => ({...item, productId: item.productId || '' })),
             customerId: selectedCustomerId,
             customerName: customerType === 'walk-in' ? (customerName || 'Walk-in') : (selectedCustomer?.name || 'Registered Customer'),
-            paymentMethod,
+            paymentMethod: partialPayments ? 'Split' : paymentMethod,
+            partialPayments: partialPayments,
             staffId: user.staff_id,
             total,
         };
-        const result = await handleSellToCustomer(saleData);
+        const result = await handleSellToCustomer(saleData as any);
 
         if (result.success && result.orderId) {
             toast({ title: 'Success', description: 'Sale has been recorded.' });
@@ -370,7 +377,8 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
                 items: cart,
                 total,
                 date: new Date(),
-                paymentMethod,
+                paymentMethod: partialPayments ? 'Split' : paymentMethod,
+                partialPayments,
                 customerName: saleData.customerName,
                 status: 'Completed',
                 subtotal: total, tax: 0
@@ -467,7 +475,6 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
                                 <ShadSelectContent>
                                     <ShadSelectItem value="Cash"><Wallet className="mr-2 h-4 w-4"/> Cash</ShadSelectItem>
                                     <ShadSelectItem value="POS"><SquareTerminal className="mr-2 h-4 w-4"/> POS</ShadSelectItem>
-                                    <ShadSelectItem value="Paystack"><ArrowRightLeft className="mr-2 h-4 w-4"/> Paystack</ShadSelectItem>
                                     <ShadSelectItem value="Credit" disabled={customerType==='walk-in'}><CreditCard className="mr-2 h-4 w-4"/> Credit</ShadSelectItem>
                                 </ShadSelectContent>
                             </ShadSelect>
@@ -475,12 +482,19 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
                     </div>
                 </div>
                 <DialogFooter>
+                    <Button variant="secondary" onClick={() => setIsSplitPaymentOpen(true)} disabled={isLoading || cart.length === 0}>Split Payment</Button>
                     <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isLoading}>
+                    <Button onClick={() => handleSubmit()} disabled={isLoading || cart.length === 0}>
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Record Sale
                     </Button>
                 </DialogFooter>
+                 <SplitPaymentDialog 
+                    isOpen={isSplitPaymentOpen} 
+                    onOpenChange={setIsSplitPaymentOpen} 
+                    total={total} 
+                    onFinalize={handleSubmit} 
+                />
             </DialogContent>
         </Dialog>
     )
@@ -1493,9 +1507,8 @@ function SalesRunDetailsPageClientContent() {
     };
     
     const handleSaleMade = (newOrder: CompletedOrder) => {
-        if (newOrder.paymentMethod === 'Paystack') {
-            setViewingOrder(newOrder);
-        }
+        // This can be used to show a receipt or confirmation
+        setViewingOrder(newOrder);
     }
     
      const getRemainingItems = useCallback(() => {
@@ -1839,7 +1852,7 @@ function SalesRunDetailsPageClientContent() {
                                             </div>
                                             <Badge variant="secondary">{order.paymentMethod}</Badge>
                                         </div>
-                                         <div className="text-sm pt-2 border-t flex justify-between">
+                                         <div className="text-sm pt-2 border-t flex justify-between items-center">
                                             <span>{order.items.reduce((sum, i) => sum + i.quantity, 0)} items</span>
                                             <span className="font-bold">{formatCurrency(order.total)}</span>
                                         </div>
@@ -1960,5 +1973,3 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
-
-    

@@ -80,7 +80,7 @@ type CompletedOrder = {
   tax: number;
   total: number;
   date: Timestamp;
-  paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit' | 'Split';
+  paymentMethod: 'POS' | 'Cash' | 'Credit' | 'Split';
   partialPayments?: { method: string, amount: number }[];
   customerName?: string;
   staffId?: string;
@@ -593,7 +593,7 @@ function RegularOrdersPage() {
           staffMatch = staffFilter === 'all' || order.staffId === staffFilter;
       }
 
-      const dateMatch = !date?.from || (orderDate >= date.from && (!date.to || orderDate <= date.to));
+      const dateMatch = !date?.from || (orderDate >= date.from && (!date.to || orderDate <= endOfDay(date.to)));
       const searchMatch = !searchTerm || order.id.toLowerCase().includes(searchTerm.toLowerCase()) || order.customerName?.toLowerCase().includes(searchTerm.toLowerCase());
       const paymentMatch = paymentMethodFilter === 'all' || order.paymentMethod === paymentMethodFilter;
       
