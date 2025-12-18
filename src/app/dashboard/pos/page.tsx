@@ -52,7 +52,7 @@ import { collection, getDocs, doc, runTransaction, increment, getDoc, query, whe
 import { db } from "@/lib/firebase";
 import { handlePosSale, initializePaystackTransaction, verifyPaystackOnServerAndFinalizeOrder } from "@/app/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment } from "./types";
+import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment, PaymentMethod } from "./types";
 import { ProductEditDialog } from "@/app/dashboard/components/product-edit-dialog";
 
 
@@ -120,7 +120,6 @@ Receipt.displayName = 'Receipt';
 
 const handlePrint = (node: HTMLElement | null) => {
     if (!node) return;
-
     const content = node.innerHTML;
     const printWindow = window.open('', '_blank', 'width=320,height=500');
     
@@ -243,6 +242,7 @@ function POSPageContent() {
   const [storeAddress, setStoreAddress] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isSplitPaymentOpen, setIsSplitPaymentOpen] = useState(false);
   
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'failed' | 'cancelled'>('idle');
 
@@ -262,7 +262,6 @@ function POSPageContent() {
   const fetchProductsForStaff = useCallback(async (staffId: string) => {
     setIsLoadingProducts(true);
     
-    // This now returns the unsubscribe function
     const unsub = onSnapshot(collection(db, 'staff', staffId, 'personal_stock'), async (stockSnapshot) => {
         if (stockSnapshot.empty) {
             setProducts([]);
@@ -318,6 +317,7 @@ function POSPageContent() {
       clearCartAndStorage();
       setPaymentStatus('idle');
       setIsCheckoutOpen(false);
+      setIsSplitPaymentOpen(false);
   }, [clearCartAndStorage]);
 
   useEffect(() => {
@@ -372,6 +372,8 @@ function POSPageContent() {
         return;
     }
 
+    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
         return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
@@ -394,13 +396,11 @@ function POSPageContent() {
     const result = await handlePosSale(saleData);
 
     if (result.success && result.orderId) {
-        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
             total: total,
-            date: new Date().toISOString(),
+            date: new Date(),
             paymentMethod: 'Split',
             customerName: customerName || 'Walk-in',
             status: 'Completed',
@@ -429,6 +429,8 @@ function POSPageContent() {
         return;
     }
     
+    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
         return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
@@ -450,13 +452,11 @@ function POSPageContent() {
     const result = await handlePosSale(saleData);
 
     if (result.success && result.orderId) {
-        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
             total,
-            date: new Date().toISOString(),
+            date: new Date(),
             paymentMethod: method,
             customerName: customerName || 'Walk-in',
             status: 'Completed',
@@ -511,7 +511,7 @@ function POSPageContent() {
                         id: verifyResult.orderId,
                         items: cart,
                         total,
-                        date: new Date().toISOString(),
+                        date: new Date(),
                         paymentMethod: 'Paystack',
                         customerName: customerName || 'Walk-in',
                         status: 'Completed',
@@ -568,7 +568,7 @@ function POSPageContent() {
         }
         return prevCart.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1, price: productInStock.price } : item);
       }
-      return [...prevCart, { id: product.id, name: product.name, price: product.price, quantity: 1 }];
+      return [...prevCart, { id: product.id, name: product.name, price: product.price, quantity: 1, costPrice: product.costPrice }];
     });
   };
 
@@ -582,7 +582,9 @@ function POSPageContent() {
         toast({ variant: "destructive", title: "Stock Limit Reached", description: `Only ${productInStock.stock} units available.` });
         return prevCart.map((item) => item.id === productId ? { ...item, quantity: productInStock.stock } : item);
       }
-      return prevCart.map((item) => item.id === productId ? { ...item, quantity: newQuantity } : item);
+      return prevCart.map((item) =>
+        item.id === productId ? { ...item, quantity: newQuantity } : item
+      );
     });
   };
   
@@ -920,20 +922,50 @@ function POSPageContent() {
                     </DialogDescription>
                 </DialogHeader>
                  <div className="grid grid-cols-1 gap-4 py-4">
-                    <Button type="button" variant="outline" className="h-20 text-lg w-full" onClick={() => handleSinglePayment('Cash')}>
-                        <Wallet className="mr-2 h-6 w-6" />
-                        Pay with Cash
-                    </Button>
-                    <Button type="button" variant="outline" className="h-20 text-lg w-full" onClick={() => handleSinglePayment('POS')}>
-                        <CreditCard className="mr-2 h-6 w-6" />
-                        Pay with POS
-                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button type="button" variant="outline" className="h-20 text-lg w-full">
+                                <Wallet className="mr-2 h-6 w-6" />
+                                Pay with Cash
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Cash Payment</AlertDialogTitle>
+                                <AlertDialogDescription>Confirm receipt of <strong>{`₦${total.toFixed(2)}`}</strong> in cash.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleSinglePayment('Cash')}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button type="button" variant="outline" className="h-20 text-lg w-full">
+                                <CreditCard className="mr-2 h-6 w-6" />
+                                Pay with POS
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm POS Payment</AlertDialogTitle>
+                                <AlertDialogDescription>Confirm successful POS transaction of <strong>{`₦${total.toFixed(2)}`}</strong>.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleSinglePayment('POS')}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    
                     <Button className="h-20 text-lg w-full font-bold bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => handleSinglePayment('Paystack')}>
                         <ArrowRightLeft className="mr-2 h-6 w-6"/>
                         Pay with Paystack
                     </Button>
                     <Separator className="my-2"/>
-                    <Button variant="secondary" className="w-full h-12" onClick={() => { setIsCheckoutOpen(false); }}>
+                    <Button variant="secondary" className="w-full h-12" onClick={() => { setIsCheckoutOpen(false); setIsSplitPaymentOpen(true); }}>
                         <FileSignature className="mr-2 h-5 w-5"/>
                         Split Payment
                     </Button>
