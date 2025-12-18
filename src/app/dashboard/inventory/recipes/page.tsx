@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -620,7 +621,7 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
     
     const productOptions = useMemo(() => allProducts.map(p => ({ value: p.id, label: p.name })), [allProducts]);
     
-    const customSelectStyles = {
+    const customSelectStyles: any = {
         control: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--input))', borderColor: 'hsl(var(--border))' }),
         menu: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--popover))', zIndex: 9999, maxHeight: '200px' }),
         menuList: (styles: any) => ({ ...styles, maxHeight: '200px', overflowY: 'auto' }),
@@ -703,7 +704,6 @@ export default function RecipesPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [ingredients, setIngredients] = useState<Ingredient[]>([]);
     
-    // Real-time states
     const [productionBatches, setProductionBatches] = useState<{ pending: ProductionBatch[], in_production: ProductionBatch[], completed: ProductionBatch[], other: ProductionBatch[] }>({ pending: [], in_production: [], completed: [], other: [] });
     const [productionLogs, setProductionLogs] = useState<ProductionLog[]>([]);
     
@@ -716,6 +716,14 @@ export default function RecipesPage() {
     const [logDate, setLogDate] = useState<DateRange | undefined>();
     const [visibleLogRows, setVisibleLogRows] = useState<number | 'all'>(10);
     const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
+
+    // New states for filtering production batches
+    const [inProductionDate, setInProductionDate] = useState<DateRange | undefined>();
+    const [completedDate, setCompletedDate] = useState<DateRange | undefined>();
+    const [otherDate, setOtherDate] = useState<DateRange | undefined>();
+    const [visibleInProductionRows, setVisibleInProductionRows] = useState<number | 'all'>(10);
+    const [visibleCompletedRows, setVisibleCompletedRows] = useState<number | 'all'>(10);
+    const [visibleOtherRows, setVisibleOtherRows] = useState<number | 'all'>(10);
 
     const fetchStaticData = useCallback(async () => {
         try {
@@ -750,7 +758,6 @@ export default function RecipesPage() {
         return () => { unsubRecipes() };
     }, [fetchStaticData, isLoading]);
     
-    // Real-time listeners
     useEffect(() => {
         const unsubBatches = onSnapshot(query(collection(db, 'production_batches'), orderBy('createdAt', 'desc')), (snapshot) => {
             const allBatches = snapshot.docs.map(docSnap => {
@@ -871,6 +878,23 @@ export default function RecipesPage() {
         return visibleLogRows === 'all' ? filteredLogs : filteredLogs.slice(0, visibleLogRows);
     }, [filteredLogs, visibleLogRows]);
     
+    // --- Batch Filtering Logic ---
+    const filterAndPaginateBatches = (batches: ProductionBatch[], dateRange: DateRange | undefined, visibleRows: number | 'all') => {
+        const filtered = batches.filter(batch => {
+            if (!dateRange?.from) return true;
+            const from = startOfDay(dateRange.from);
+            const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+            const batchDate = new Date(batch.createdAt);
+            return batchDate >= from && batchDate <= to;
+        });
+        const paginated = visibleRows === 'all' ? filtered : filtered.slice(0, visibleRows);
+        return { filtered, paginated };
+    }
+    
+    const { filtered: filteredInProduction, paginated: paginatedInProduction } = filterAndPaginateBatches(productionBatches.in_production, inProductionDate, visibleInProductionRows);
+    const { filtered: filteredCompleted, paginated: paginatedCompleted } = filterAndPaginateBatches(productionBatches.completed, completedDate, visibleCompletedRows);
+    const { filtered: filteredOther, paginated: paginatedOther } = filterAndPaginateBatches(productionBatches.other, otherDate, visibleOtherRows);
+
     if (!user) {
          return <div className="flex justify-center items-center h-full"><Loader2 className="h-16 w-16 animate-spin" /></div>;
     }
@@ -1028,19 +1052,22 @@ export default function RecipesPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {[
-                                { title: 'Pending Approval', batches: productionBatches.pending },
-                                { title: 'In Production', batches: productionBatches.in_production },
-                                { title: 'Completed & Returned', batches: productionBatches.completed },
-                                { title: 'Declined / Cancelled', batches: productionBatches.other }
+                                { title: 'Pending Approval', batches: productionBatches.pending, date: null, setDate: null, visibleRows: 'all', setVisibleRows: null, filteredCount: productionBatches.pending.length, paginatedList: productionBatches.pending },
+                                { title: 'In Production', batches: productionBatches.in_production, date: inProductionDate, setDate: setInProductionDate, visibleRows: visibleInProductionRows, setVisibleRows: setVisibleInProductionRows, filteredCount: filteredInProduction.length, paginatedList: paginatedInProduction },
+                                { title: 'Completed & Returned', batches: productionBatches.completed, date: completedDate, setDate: setCompletedDate, visibleRows: visibleCompletedRows, setVisibleRows: setVisibleCompletedRows, filteredCount: filteredCompleted.length, paginatedList: paginatedCompleted },
+                                { title: 'Declined / Cancelled', batches: productionBatches.other, date: otherDate, setDate: setOtherDate, visibleRows: visibleOtherRows, setVisibleRows: setVisibleOtherRows, filteredCount: filteredOther.length, paginatedList: paginatedOther }
                             ].map(section => (
                                 (isBaker || section.batches.length > 0) && (
                                 <div key={section.title}>
-                                    <h3 className="font-semibold mb-2">{section.title} ({section.batches.length})</h3>
+                                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-2 gap-2">
+                                        <h3 className="font-semibold">{section.title} ({section.filteredCount})</h3>
+                                        {section.setDate && <DateRangeFilter date={section.date} setDate={section.setDate} />}
+                                    </div>
                                     <div className="border rounded-md">
                                     <Table>
                                         <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                         <TableBody>
-                                            {section.batches.length > 0 ? section.batches.map(batch => (
+                                            {section.paginatedList.length > 0 ? section.paginatedList.map(batch => (
                                                 <TableRow key={batch.id}>
                                                     <TableCell>{format(new Date(batch.createdAt), 'Pp')}</TableCell>
                                                     <TableCell>{batch.recipeName}</TableCell>
@@ -1067,6 +1094,7 @@ export default function RecipesPage() {
                                         </TableBody>
                                     </Table>
                                     </div>
+                                    {section.setVisibleRows && <CardFooter className="pt-4"><PaginationControls visibleRows={section.visibleRows} setVisibleRows={section.setVisibleRows} totalRows={section.filteredCount} /></CardFooter>}
                                 </div>
                                 )
                             ))}
@@ -1135,3 +1163,4 @@ export default function RecipesPage() {
         </div>
     );
 }
+
