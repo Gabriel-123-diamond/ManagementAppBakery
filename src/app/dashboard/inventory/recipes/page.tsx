@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -706,61 +705,11 @@ export default function RecipesPage() {
             setUser(JSON.parse(storedUser));
         }
 
-        const hardcodedRecipes = [
-            {
-               id: "rec_general",
-               name: "General Bread Production",
-               description: "The standard recipe for producing all bread types.",
-               ingredients: [
-                   { ingredientId: "ing_1", ingredientName: "Flour", quantity: 50000, unit: "g" },
-                   { ingredientId: "ing_2", ingredientName: "Sugar", quantity: 4500, unit: "g" },
-                   { ingredientId: "ing_3", ingredientName: "Salt", quantity: 450, unit: "g" },
-                   { ingredientId: "ing_4", ingredientName: "Yeast", quantity: 500, unit: "g" },
-                   { ingredientId: "ing_5", ingredientName: "Preservative", quantity: 150, unit: "g" },
-                   { ingredientId: "ing_6", ingredientName: "Tin Milk", quantity: 6, unit: "pcs" },
-                   { ingredientId: "ing_7", ingredientName: "Butter", quantity: 5000, unit: "g" },
-                   { ingredientId: "ing_8", ingredientName: "Butterscotch Flavor", quantity: 100, unit: "g" },
-                   { ingredientId: "ing_9", ingredientName: "Zeast Flavor", quantity: 60, unit: "g" },
-                   { ingredientId: "ing_10", ingredientName: "Lux Essence", quantity: 100, unit: "g" },
-                   { ingredientId: "ing_11", ingredientName: "Eggs", quantity: 12, unit: "pcs" },
-                   { ingredientId: "ing_12", ingredientName: "Water", quantity: 20000, unit: "ml" },
-                   { ingredientId: "ing_13", ingredientName: "Vegetable Oil", quantity: 300, unit: "ml" },
-                   { ingredientId: "ing_14", ingredientName: "Bread Improver", quantity: 250, unit: "g" },
-               ],
-               isGeneralRecipe: true,
-            },
-            {
-               id: "rec_butterscotch",
-               name: "Special Butterscotch Loaf",
-               description: "A rich and fluffy loaf infused with a double dose of butterscotch for a sweet, aromatic flavor.",
-               ingredients: [
-                   { ingredientId: "ing_1", ingredientName: "Flour", quantity: 50000, unit: "g" },
-                   { ingredientId: "ing_2", ingredientName: "Sugar", quantity: 4000, unit: "g" },
-                   { ingredientId: "ing_3", ingredientName: "Salt", quantity: 450, unit: "g" },
-                   { ingredientId: "ing_4", ingredientName: "Yeast", quantity: 500, unit: "g" },
-                   { ingredientId: "ing_5", ingredientName: "Preservative", quantity: 150, unit: "g" },
-                   { ingredientId: "ing_6", ingredientName: "Tin Milk", quantity: 4, unit: "pcs" },
-                   { ingredientId: "ing_7", ingredientName: "Butter", quantity: 6000, unit: "g" },
-                   { ingredientId: "ing_8", ingredientName: "Butterscotch Flavor", quantity: 150, unit: "g" },
-                   { ingredientId: "ing_16", ingredientName: "Conflaco Butter Scotch", quantity: 50, unit: "g" },
-                   { ingredientId: "ing_11", ingredientName: "Eggs", quantity: 10, unit: "pcs" },
-                   { ingredientId: "ing_12", ingredientName: "Water", quantity: 18000, unit: "ml" },
-                   { ingredientId: "ing_14", ingredientName: "Bread Improver", quantity: 250, unit: "g" },
-               ],
-               applicableProductIds: ["prod_bread_1", "prod_bread_6"],
-               isGeneralRecipe: false,
-            }
-        ];
-        setRecipes(hardcodedRecipes);
         fetchStaticData();
         
         const unsubRecipes = onSnapshot(collection(db, "recipes"), (snapshot) => {
             const dbRecipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
-            setRecipes(prev => {
-                const combined = [...prev.filter(p => p.id.startsWith('rec_')), ...dbRecipes];
-                const uniqueRecipes = Array.from(new Map(combined.map(item => [item.id, item])).values());
-                return uniqueRecipes;
-            });
+            setRecipes(dbRecipes);
             if(isLoading) setIsLoading(false);
         });
 
@@ -817,11 +766,13 @@ export default function RecipesPage() {
             productName: recipe.name,
             quantityToProduce: 1,
             batchSize: 'full' as 'full' | 'half',
+            recipe: recipe
         };
         
         const result = await startProductionBatch(batchData, user);
         if (result.success) {
             toast({ title: 'Success', description: 'Production batch requested for approval.'});
+            setIsProductionDialogOpen(false);
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error});
         }
@@ -853,10 +804,6 @@ export default function RecipesPage() {
     
     const handleDeleteRecipeAction = async (recipe: Recipe) => {
         if (!user) return;
-        if (recipe.id.startsWith('rec_')) {
-             toast({ variant: 'destructive', title: 'Error', description: 'Hardcoded recipes cannot be deleted.' });
-             return;
-        }
         const result = await handleDeleteRecipe(recipe.id, recipe.name, user);
         if (result.success) {
             toast({ title: "Success", description: `Recipe "${recipe.name}" has been deleted.` });
@@ -973,7 +920,7 @@ export default function RecipesPage() {
                                             <CardFooter className="flex justify-between">
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="sm" disabled={!canEditRecipe || recipe.id.startsWith('rec_')}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+                                                        <Button variant="destructive" size="sm" disabled={!canEditRecipe}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
                                                     </AlertDialogTrigger>
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
@@ -1023,7 +970,10 @@ export default function RecipesPage() {
                                                         <p className="font-semibold">{recipe.name}</p>
                                                         <p className="text-sm text-muted-foreground">{recipe.ingredients.length} ingredients</p>
                                                     </div>
-                                                    <Button onClick={() => handleStartProduction(recipe)}>Start Batch</Button>
+                                                    <Button onClick={() => handleStartProduction(recipe)} disabled={isSubmitting}>
+                                                        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin"/>}
+                                                        Start Batch
+                                                    </Button>
                                                 </Card>
                                             ))}
                                         </div>
