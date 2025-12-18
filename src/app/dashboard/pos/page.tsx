@@ -54,6 +54,7 @@ import { handlePosSale, initializePaystackTransaction } from "@/app/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment, PaymentMethod } from "./types";
 import { ProductEditDialog } from "@/app/dashboard/components/product-edit-dialog";
+import { usePaystackPayment } from "react-paystack";
 
 
 const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeAddress?: string }>(({ order, storeAddress }, ref) => {
@@ -72,7 +73,7 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
                     <p><strong>Customer:</strong> {order.customerName || 'Walk-in'}</p>
                 </div>
                 <Separator className="my-2" />
-                {order.paymentMethod === 'Split' && order.partialPayments && (
+                {order.paymentMethod === 'Split' && order.partialPayments && order.partialPayments.length > 0 && (
                     <>
                     <div className="text-xs">
                         <h4 className="font-semibold mb-1">Payment Details:</h4>
@@ -708,6 +709,45 @@ function POSPageContent() {
         return;
     }
     
+    if (method === 'Paystack') {
+        const loadingToast = toast({ title: "Initializing Paystack...", description: "Please wait.", duration: Infinity });
+        const paystackResult = await initializePaystackTransaction({
+            email: customerEmail || user.email,
+            total: total,
+            customerName: customerName,
+            staffId: selectedStaffId,
+            items: cart,
+        });
+        loadingToast.dismiss();
+
+        if (paystackResult.success && paystackResult.reference) {
+             const PaystackPop = (await import('@paystack/inline-js')).default;
+             const paystack = new PaystackPop();
+             paystack.newTransaction({
+                key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+                email: customerEmail || user.email,
+                amount: Math.round(total * 100),
+                ref: paystackResult.reference,
+                onSuccess: async () => {
+                   await processSale('Paystack');
+                },
+                onClose: () => {
+                    toast({ variant: 'destructive', title: 'Payment Cancelled' });
+                    setPaymentStatus('cancelled');
+                }
+            });
+        } else {
+            toast({ variant: "destructive", title: "Paystack Error", description: paystackResult.error });
+            setPaymentStatus('failed');
+        }
+    } else {
+        await processSale(method);
+    }
+  }
+
+  const processSale = async (method: 'Cash' | 'POS' | 'Paystack') => {
+    if (!user || !selectedStaffId) return;
+
     const itemsWithCost = cart.map(item => {
         const productDetails = products.find(p => p.id === item.id);
         return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
@@ -1170,6 +1210,11 @@ function POSPageContent() {
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+                    
+                    <Button variant="outline" className="h-20 text-lg w-full" onClick={() => handleSinglePayment('Paystack')}>
+                        <ArrowRightLeft className="mr-2 h-6 w-6" />
+                        Pay with Paystack
+                    </Button>
                     
                     <Separator className="my-2"/>
                     <Button variant="secondary" className="w-full h-12" onClick={() => { setIsCheckoutOpen(false); setIsSplitPaymentOpen(true); }}>
