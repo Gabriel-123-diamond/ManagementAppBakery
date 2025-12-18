@@ -2654,7 +2654,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             let totalSale = 0;
 
             for (const payment of paymentMethods) {
-                const methodKey = (payment.method.toLowerCase() === 'paystack') ? 'transfer' : payment.method.toLowerCase();
+                const methodKey = payment.method.toLowerCase();
                 if (methodKey) {
                     dailyTotals[methodKey] = (dailyTotals[methodKey] || 0) + payment.amount;
                     totalSale += payment.amount;
@@ -2671,7 +2671,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 const initialData = {
                     date: Timestamp.fromDate(startOfDay(orderDate)),
                     description: `Daily Sales for ${salesDocId}`,
-                    cash: 0, pos: 0, transfer: 0, creditSales: 0, shortage: 0,
+                    cash: 0, pos: 0, creditSales: 0, shortage: 0,
                     ...dailyTotals,
                     total: totalSale,
                 };
@@ -2889,7 +2889,10 @@ export async function getStaffByRole(role: string): Promise<any[]> {
 
 export async function initializePaystackTransaction(data: any): Promise<{ success: boolean; error?: string, reference?: string }> {
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!secretKey) return { success: false, error: "Paystack secret key is not configured." };
+    if (!secretKey) {
+        console.error("Paystack secret key is not configured in .env.local");
+        return { success: false, error: "Paystack secret key is not configured." };
+    }
     
     try {
         const staffDoc = await getDoc(doc(db, "staff", data.staffId));
@@ -2904,7 +2907,6 @@ export async function initializePaystackTransaction(data: any): Promise<{ succes
             isDebtPayment: data.isDebtPayment || false,
             runId: data.runId || null,
             customerId: data.customerId || null,
-            // New fields for split payment
             isPartialPayment: data.isPartialPayment || false,
             posHoldId: data.posHoldId || null,
         };
@@ -3153,7 +3155,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
                      transaction.set(salesDocRef, {
                         date: runData.date,
                         description: `Daily Sales for ${salesDocId}`,
-                        cash: 0, pos: 0, transfer: 0, creditSales: 0,
+                        cash: 0, pos: 0,
                         total: 0,
                         shortage: shortage
                     });

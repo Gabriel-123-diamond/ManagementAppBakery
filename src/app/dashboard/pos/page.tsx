@@ -275,7 +275,7 @@ function SplitPaymentDialog({
 
   const allConfirmed = useMemo(() => {
       const unconfirmedTotal = payments.filter(p => !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
-      return Math.abs(unconfirmedTotal - remainingTotal) < 0.01 && payments.every(p => p.confirmed || p.amount === 0);
+      return Math.abs(unconfirmedTotal) < 0.01 && payments.every(p => p.confirmed || p.amount === 0);
   }, [payments, remainingTotal]);
 
 
@@ -354,49 +354,7 @@ function SplitPaymentDialog({
     const payment = payments.find(p => p.id === id);
     if (!payment || !user) return;
     
-    if (payment.method === 'Paystack') {
-        handlePaystackPartialPayment(payment);
-    } else {
-        // For Cash and POS, just confirm locally
-        confirmPayment(id);
-    }
-  };
-
-  const handlePaystackPartialPayment = async (payment: PartialPayment) => {
-    if (!user) return;
-    
-    setIsSubmitting(payment.id);
-    const initResult = await initializePaystackTransaction({
-        email: user.email,
-        total: payment.amount,
-        customerName: 'POS Split Payment',
-        staffId: user.staff_id,
-        items: [],
-        isPosSale: true,
-        isPartialPayment: true,
-    });
-    
-    if (initResult.success && initResult.reference) {
-        const PaystackPop = (await import('@paystack/inline-js')).default;
-        const paystack = new PaystackPop();
-        paystack.newTransaction({
-            key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
-            email: user.email,
-            amount: Math.round(payment.amount * 100),
-            ref: initResult.reference,
-            onSuccess: () => {
-                confirmPayment(payment.id, true);
-                setIsSubmitting(null);
-            },
-            onClose: () => {
-                toast({ variant: "destructive", title: "Payment Cancelled" });
-                setIsSubmitting(null);
-            }
-        });
-    } else {
-        toast({ variant: 'destructive', title: 'Error', description: initResult.error || 'Could not initialize payment.' });
-        setIsSubmitting(null);
-    }
+    confirmPayment(id);
   };
 
   const confirmPayment = (id: number, isVerified = false) => {
@@ -420,27 +378,17 @@ function SplitPaymentDialog({
         toast({title: "Payment Confirmed", description: `Confirmed ₦${payment.amount.toFixed(2)} via ${payment.method}.`})
     }
     
-    if (payment.method !== 'Paystack' && !isVerified) {
-        confirmAction();
-        return;
-    }
-    
-    if (isVerified) {
-        // This is for paystack callback
-        confirmAction();
-        toast({title: "Paystack Payment Confirmed", description: `Received ₦${payment.amount.toFixed(2)}.`})
-    }
+    confirmAction();
   }
 
 
-  const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack'];
+  const availableMethods: PaymentMethod[] = ['Cash', 'POS'];
   
   const handleDialogInteractOutside = (event: Event) => {
     const target = event.target as HTMLElement;
     if (target.closest('iframe[src*="paystack.com"]')) {
       return; 
     }
-    event.preventDefault();
   };
 
   return (
@@ -498,40 +446,29 @@ function SplitPaymentDialog({
                   disabled={payment.confirmed}
                 />
                  
-                {payment.method === 'Paystack' ? (
-                     <Button
-                        size="icon"
-                        variant={payment.confirmed ? "ghost" : "outline"}
-                        onClick={() => handleConfirmPayment(payment.id)}
-                        disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
-                    >
-                         {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
-                    </Button>
-                ) : (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button
-                                size="icon"
-                                variant={payment.confirmed ? "ghost" : "outline"}
-                                disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
-                            >
-                                {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
-                            </Button>
-                        </AlertDialogTrigger>
-                         {!payment.confirmed && (
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
-                                    <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        )}
-                    </AlertDialog>
-                )}
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button
+                            size="icon"
+                            variant={payment.confirmed ? "ghost" : "outline"}
+                            disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
+                        >
+                            {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
+                        </Button>
+                    </AlertDialogTrigger>
+                     {!payment.confirmed && (
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
+                                <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    )}
+                </AlertDialog>
                
 
                 <Button
@@ -762,10 +699,6 @@ function POSPageContent() {
   
   const handleSinglePayment = async (method: 'Cash' | 'POS' | 'Paystack') => {
     setIsCheckoutOpen(false);
-    if (method === 'Paystack') {
-        handlePaystackPayment();
-        return;
-    }
     
     setPaymentStatus('processing');
 
@@ -810,83 +743,6 @@ function POSPageContent() {
         toast({ title: 'Sale Recorded', description: 'Order has been successfully recorded.' });
     } else {
         toast({ variant: "destructive", title: "Order Failed", description: result.error || "Could not complete the sale." });
-        setPaymentStatus('failed');
-    }
-  }
-
-  const handlePaystackPayment = async () => {
-    if (!user || !selectedStaffId) return;
-
-    setPaymentStatus('processing');
-    const itemsWithCost = cart.map(item => {
-        const productDetails = products.find(p => p.id === item.id);
-        return { productId: item.id, name: item.name, quantity: item.quantity, price: item.price, costPrice: productDetails?.costPrice || 0 };
-    });
-
-    const staffDoc = await getDoc(doc(db, "staff", selectedStaffId));
-    const staffName = staffDoc.exists() ? staffDoc.data().name : 'Unknown';
-
-    const initResult = await initializePaystackTransaction({
-        email: customerEmail || user.email,
-        total: total,
-        customerName: customerName || 'Walk-in',
-        staffId: selectedStaffId,
-        staffName,
-        items: itemsWithCost,
-        isPosSale: true,
-        isDebtPayment: false,
-    });
-    
-    if (initResult.success && initResult.reference) {
-        const PaystackPop = (await import('@paystack/inline-js')).default;
-        const paystack = new PaystackPop();
-        
-        paystack.newTransaction({
-            key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
-            email: customerEmail || user.email,
-            amount: Math.round(total * 100),
-            ref: initResult.reference,
-            onSuccess: async (transaction) => {
-                setPaymentStatus('processing');
-                const saleData = {
-                    items: itemsWithCost,
-                    total: total,
-                    paymentMethod: 'Paystack' as 'Paystack',
-                    customerName: customerName || 'Walk-in',
-                    staffId: selectedStaffId,
-                    staffName,
-                    date: new Date().toISOString()
-                };
-                const result = await handlePosSale(saleData);
-
-                if (result.success && result.orderId) {
-                    const completedOrder: CompletedOrder = {
-                        id: result.orderId,
-                        items: cart,
-                        total,
-                        date: new Date(),
-                        paymentMethod: 'Paystack',
-                        customerName: customerName || 'Walk-in',
-                        status: 'Completed',
-                        subtotal: total, tax: 0
-                    };
-                    handleSaleMade(completedOrder);
-                    toast({ title: "Payment Successful", description: "Order has been verified and completed." });
-                    setPaymentStatus('success');
-                } else {
-                    toast({ variant: "destructive", title: "Verification Failed", description: result.error || "Could not verify payment." });
-                    setPaymentStatus('failed');
-                }
-            },
-            onClose: () => {
-                if (paymentStatus !== 'success') {
-                    toast({ variant: "destructive", title: "Payment Cancelled" });
-                    setPaymentStatus('cancelled');
-                }
-            }
-        });
-    } else {
-        toast({ variant: 'destructive', title: 'Error', description: initResult.error || 'Could not initialize payment.' });
         setPaymentStatus('failed');
     }
   }
@@ -1315,10 +1171,6 @@ function POSPageContent() {
                         </AlertDialogContent>
                     </AlertDialog>
                     
-                    <Button className="h-20 text-lg w-full font-bold bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => handleSinglePayment('Paystack')}>
-                        <ArrowRightLeft className="mr-2 h-6 w-6"/>
-                        Pay with Paystack
-                    </Button>
                     <Separator className="my-2"/>
                     <Button variant="secondary" className="w-full h-12" onClick={() => { setIsCheckoutOpen(false); setIsSplitPaymentOpen(true); }}>
                         <FileSignature className="mr-2 h-5 w-5"/>

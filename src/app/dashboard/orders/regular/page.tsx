@@ -764,7 +764,6 @@ function RegularOrdersPage() {
                                 <SelectItem value="all">All Payments</SelectItem>
                                 <SelectItem value="Cash">Cash</SelectItem>
                                 <SelectItem value="POS">POS</SelectItem>
-                                <SelectItem value="Paystack">Paystack</SelectItem>
                                 <SelectItem value="Split">Split</SelectItem>
                                 {!isShowroomStaff && <SelectItem value="Credit">Credit</SelectItem>}
                             </SelectContent>

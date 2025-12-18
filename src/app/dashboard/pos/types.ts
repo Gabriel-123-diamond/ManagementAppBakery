@@ -48,7 +48,7 @@ export type SelectableStaff = {
     role: string;
 };
 
-export type PaymentMethod = 'Cash' | 'POS' | 'Paystack';
+export type PaymentMethod = 'Cash' | 'POS';
 
 export interface PartialPayment {
     id: number;
