@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
 import Image from "next/image";
-import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit, FileSignature, Check } from "lucide-react";
+import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit, FileSignature, Check, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -121,7 +121,7 @@ Receipt.displayName = 'Receipt';
 const handlePrint = (node: HTMLElement | null) => {
     if (!node) return;
     const content = node.innerHTML;
-    const printWindow = window.open('', '_blank', 'width=320,height=500');
+    const printWindow = window.open('', '_blank');
     
     if (printWindow) {
         printWindow.document.write(`
@@ -243,12 +243,19 @@ function SplitPaymentDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const totalPaid = payments.reduce(
-    (acc, p) => acc + (p.confirmed ? Number(p.amount) : 0),
-    0
-  )
-  const remainingTotal = total - totalPaid
-  const allConfirmed = remainingTotal <= 0 && payments.every(p => p.confirmed || p.amount === 0)
+  const totalPaid = useMemo(() => {
+    return payments.reduce(
+        (acc, p) => acc + (p.confirmed ? Number(p.amount) : 0),
+        0
+      )
+  }, [payments]);
+
+  const remainingTotal = useMemo(() => total - totalPaid, [total, totalPaid]);
+
+  const allConfirmed = useMemo(() => {
+      const unconfirmedTotal = payments.filter(p => !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
+      return Math.abs(unconfirmedTotal - remainingTotal) < 0.01 && payments.every(p => p.confirmed || p.amount === 0);
+  }, [payments, remainingTotal]);
 
 
   const handleMethodChange = (id: number, method: PaymentMethod | '') => {
@@ -261,26 +268,31 @@ function SplitPaymentDialog({
     const newAmount = parseFloat(amountStr) || 0;
     
     // Validation
-    const otherPaymentsTotal = payments.filter(p => p.id !== id && !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
-    const availableToAllocate = remainingTotal - otherPaymentsTotal;
+    const unconfirmedTotal = payments.filter(p => !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
+    const availableToAllocate = total - totalPaid;
     
-    if (newAmount > availableToAllocate && availableToAllocate > 0) {
-        toast({ variant: 'destructive', title: 'Invalid Amount', description: `Amount cannot exceed remaining balance of ₦${availableToAllocate.toFixed(2)}` });
-        return; // Or cap the amount
+    const currentTotalOfUnconfirmed = payments
+        .filter(p => !p.confirmed && p.id !== id)
+        .reduce((sum, p) => sum + Number(p.amount), 0);
+    
+    if (newAmount > availableToAllocate - currentTotalOfUnconfirmed) {
+        toast({ variant: 'destructive', title: 'Invalid Amount', description: `Amount cannot exceed remaining balance.` });
+        return;
     }
 
     setPayments(prevPayments => {
         let newPayments = prevPayments.map(p => p.id === id ? { ...p, amount: newAmount } : p);
-
         const unconfirmedUnedited = newPayments.filter(p => !p.confirmed && p.id !== id);
-        const currentTotal = newPayments.filter(p => !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
-        const remainingToDistribute = remainingTotal - currentTotal + (prevPayments.find(p => p.id === id)?.amount || 0) - newAmount;
-
-        if (unconfirmedUnedited.length > 0) {
-            const amountPerField = remainingToDistribute / unconfirmedUnedited.length;
-             newPayments = newPayments.map(p => {
-                if (!p.confirmed && p.id !== id) {
-                    return { ...p, amount: Number(p.amount) + amountPerField };
+        
+        if(unconfirmedUnedited.length > 0) {
+            const remainingToDistribute = availableToAllocate - newAmount - unconfirmedUnedited.reduce((sum, p) => sum + Number(p.amount), 0);
+            
+            // Distribute remaining amount among other unconfirmed fields
+            let distributionAmount = unconfirmedUnedited.length > 0 ? remainingToDistribute / unconfirmedUnedited.length : 0;
+            
+            newPayments = newPayments.map(p => {
+                if (unconfirmedUnedited.some(u => u.id === p.id)) {
+                    return { ...p, amount: Number(p.amount) + distributionAmount };
                 }
                 return p;
             });
@@ -290,18 +302,34 @@ function SplitPaymentDialog({
 };
 
   const addPaymentMethod = () => {
-    if (remainingTotal <= 0) {
+    if (remainingTotal <= 0.01) {
         toast({variant: 'destructive', title: "Balance Cleared", description: "The total amount has already been paid."});
         return;
     }
+    const newAmount = remainingTotal / (payments.filter(p => !p.confirmed).length + 1);
+
+    const updatedPayments = payments.map(p => !p.confirmed ? {...p, amount: newAmount} : p);
+    
     setPayments([
-      ...payments,
-      { id: Date.now(), method: '', amount: 0, confirmed: false },
+      ...updatedPayments,
+      { id: Date.now(), method: '', amount: newAmount, confirmed: false },
     ])
   }
 
   const removePaymentMethod = (id: number) => {
-    setPayments(payments.filter((p) => p.id !== id))
+    const paymentToRemove = payments.find(p => p.id === id);
+    if (!paymentToRemove || paymentToRemove.confirmed) return;
+    
+    const remainingPayments = payments.filter((p) => p.id !== id);
+    
+    const unconfirmedPayments = remainingPayments.filter(p => !p.confirmed);
+    if (unconfirmedPayments.length > 0) {
+        const totalToDistribute = total - totalPaid;
+        const amountPerField = totalToDistribute / unconfirmedPayments.length;
+        setPayments(remainingPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p));
+    } else {
+        setPayments(remainingPayments);
+    }
   }
 
   const confirmPayment = (id: number) => {
@@ -331,7 +359,7 @@ function SplitPaymentDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          {payments.map((payment) => (
+          {payments.map((payment, index) => (
             <div
               key={payment.id}
               className="grid grid-cols-[1fr_120px_auto_auto] items-center gap-2"
@@ -367,12 +395,12 @@ function SplitPaymentDialog({
               />
                <AlertDialog>
                     <AlertDialogTrigger asChild>
-                         <Button
+                        <Button
                             size="icon"
                             variant="ghost"
                             disabled={payment.confirmed || !payment.method || !payment.amount}
                         >
-                            <Check className="h-4 w-4" />
+                            {payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />}
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -396,14 +424,16 @@ function SplitPaymentDialog({
               </Button>
             </div>
           ))}
-          <Button
-            variant="outline"
-            onClick={addPaymentMethod}
-            disabled={allConfirmed}
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Payment Method
-          </Button>
+          <div className="flex justify-start">
+             <Button
+                variant="outline"
+                onClick={addPaymentMethod}
+                disabled={allConfirmed}
+            >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Payment Method
+            </Button>
+          </div>
         </div>
         <DialogFooter className="grid grid-cols-2 gap-2">
             <Button variant="secondary" onClick={() => onHold([], payments)} disabled={allConfirmed}>
@@ -593,9 +623,9 @@ function POSPageContent() {
     };
     
     const result = await handlePosSale(saleData);
+    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
     if (result.success && result.orderId) {
-        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
@@ -648,9 +678,9 @@ function POSPageContent() {
     };
     
     const result = await handlePosSale(saleData);
+    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
     if (result.success && result.orderId) {
-        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
@@ -704,9 +734,9 @@ function POSPageContent() {
             onSuccess: async (transaction) => {
                 setPaymentStatus('processing');
                 const verifyResult = await verifyPaystackOnServerAndFinalizeOrder(transaction.reference);
+                const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
                 if (verifyResult.success && verifyResult.orderId) {
-                     const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-                    const completedOrder: CompletedOrder = {
+                     const completedOrder: CompletedOrder = {
                         id: verifyResult.orderId,
                         items: cart,
                         total,
