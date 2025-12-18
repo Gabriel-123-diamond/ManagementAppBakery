@@ -685,23 +685,18 @@ export default function RecipesPage() {
     const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
 
     const fetchStaticData = useCallback(async () => {
-        setIsLoading(true);
         try {
-            const [recipeData, productData, ingredientData] = await Promise.all([
-                getRecipes(),
+            const [productData, ingredientData] = await Promise.all([
                 getProducts(),
                 getIngredients(),
             ]);
 
-            setRecipes(recipeData);
             setProducts(productData);
             setIngredients(ingredientData);
 
         } catch (error) {
             console.error("Error fetching data:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not fetch static data." });
-        } finally {
-            setIsLoading(false);
         }
     }, [toast]);
     
@@ -710,7 +705,7 @@ export default function RecipesPage() {
         if (storedUser) {
             setUser(JSON.parse(storedUser));
         }
-        // Set static recipes for display
+
         const hardcodedRecipes = [
             {
                id: "rec_general",
@@ -758,7 +753,19 @@ export default function RecipesPage() {
         ];
         setRecipes(hardcodedRecipes);
         fetchStaticData();
-    }, [fetchStaticData]);
+        
+        const unsubRecipes = onSnapshot(collection(db, "recipes"), (snapshot) => {
+            const dbRecipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
+            setRecipes(prev => {
+                const combined = [...prev.filter(p => p.id.startsWith('rec_')), ...dbRecipes];
+                const uniqueRecipes = Array.from(new Map(combined.map(item => [item.id, item])).values());
+                return uniqueRecipes;
+            });
+            if(isLoading) setIsLoading(false);
+        });
+
+        return () => { unsubRecipes() };
+    }, [fetchStaticData, isLoading]);
     
     // Real-time listeners
     useEffect(() => {
@@ -846,6 +853,10 @@ export default function RecipesPage() {
     
     const handleDeleteRecipeAction = async (recipe: Recipe) => {
         if (!user) return;
+        if (recipe.id.startsWith('rec_')) {
+             toast({ variant: 'destructive', title: 'Error', description: 'Hardcoded recipes cannot be deleted.' });
+             return;
+        }
         const result = await handleDeleteRecipe(recipe.id, recipe.name, user);
         if (result.success) {
             toast({ title: "Success", description: `Recipe "${recipe.name}" has been deleted.` });
@@ -948,7 +959,7 @@ export default function RecipesPage() {
                         </CardHeader>
                         <CardContent>
                              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {isLoading ? <Loader2 className="h-8 w-8 animate-spin"/> : (
+                                {isLoading ? <div className="col-span-full text-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
                                     recipes.map(recipe => (
                                         <Card key={recipe.id}>
                                             <CardHeader>
@@ -962,7 +973,7 @@ export default function RecipesPage() {
                                             <CardFooter className="flex justify-between">
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="sm" disabled={!canEditRecipe}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+                                                        <Button variant="destructive" size="sm" disabled={!canEditRecipe || recipe.id.startsWith('rec_')}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
                                                     </AlertDialogTrigger>
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
