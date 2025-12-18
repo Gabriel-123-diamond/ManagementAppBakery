@@ -2592,7 +2592,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
 type PosSaleData = {
     items: { productId: string; quantity: number; price: number, name: string, costPrice: number }[];
     customerName: string;
-    paymentMethod: 'Cash' | 'POS' | 'Paystack';
+    paymentMethod: 'Cash' | 'POS' | 'Paystack' | 'Split';
     staffId: string;
     staffName: string;
     total: number;
