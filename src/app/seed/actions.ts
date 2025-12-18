@@ -122,7 +122,29 @@ const recipesData = [
            { ingredientId: "ing_12", ingredientName: "Water", quantity: 20000, unit: "ml" },
            { ingredientId: "ing_13", ingredientName: "Vegetable Oil", quantity: 300, unit: "ml" },
            { ingredientId: "ing_14", ingredientName: "Bread Improver", quantity: 250, unit: "g" },
-       ]
+       ],
+       isGeneralRecipe: true,
+    },
+    {
+       id: "rec_butterscotch",
+       name: "Special Butterscotch Loaf",
+       description: "A rich and fluffy loaf infused with a double dose of butterscotch for a sweet, aromatic flavor.",
+       ingredients: [
+           { ingredientId: "ing_1", ingredientName: "Flour", quantity: 50000, unit: "g" },
+           { ingredientId: "ing_2", ingredientName: "Sugar", quantity: 4000, unit: "g" },
+           { ingredientId: "ing_3", ingredientName: "Salt", quantity: 450, unit: "g" },
+           { ingredientId: "ing_4", ingredientName: "Yeast", quantity: 500, unit: "g" },
+           { ingredientId: "ing_5", ingredientName: "Preservative", quantity: 150, unit: "g" },
+           { ingredientId: "ing_6", ingredientName: "Tin Milk", quantity: 4, unit: "pcs" },
+           { ingredientId: "ing_7", ingredientName: "Butter", quantity: 6000, unit: "g" },
+           { ingredientId: "ing_8", ingredientName: "Butterscotch Flavor", quantity: 150, unit: "g" },
+           { ingredientId: "ing_16", ingredientName: "Conflaco Butter Scotch", quantity: 50, unit: "g" },
+           { ingredientId: "ing_11", ingredientName: "Eggs", quantity: 10, unit: "pcs" },
+           { ingredientId: "ing_12", ingredientName: "Water", quantity: 18000, unit: "ml" },
+           { ingredientId: "ing_14", ingredientName: "Bread Improver", quantity: 250, unit: "g" },
+       ],
+       applicableProductIds: ["prod_bread_1", "prod_bread_6"],
+       isGeneralRecipe: false,
     }
 ];
 
@@ -681,5 +703,3 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
         return { success: false, error: (e as Error).message };
     }
 }
-
-    
