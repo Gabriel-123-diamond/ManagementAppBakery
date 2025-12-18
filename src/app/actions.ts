@@ -2888,7 +2888,7 @@ export async function getStaffByRole(role: string): Promise<any[]> {
 }
 
 export async function initializePaystackTransaction(data: any): Promise<{ success: boolean; error?: string, reference?: string }> {
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    const secretKey = process.env.NEXT_PUBLIC_PAYSTACK_SECRET_KEY;
     if (!secretKey) return { success: false, error: "Paystack secret key is not configured." };
     
     try {
@@ -2930,77 +2930,6 @@ export async function initializePaystackTransaction(data: any): Promise<{ succes
     } catch (error) {
         console.error('Paystack initialization error:', error);
         return { success: false, error: 'An unknown error occurred while initializing payment.' };
-    }
-}
-
-export async function verifyPaystackOnServerAndFinalizeOrder(reference: string): Promise<{ success: boolean; error?: string, orderId?: string }> {
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!secretKey) return { success: false, error: "Paystack secret key is not configured." };
-
-    try {
-        const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-            headers: { Authorization: `Bearer ${secretKey}` },
-        });
-
-        const verificationData = await verifyResponse.json();
-        
-        if (!verificationData || !verificationData.status || verificationData.data.status !== 'success') {
-            return { success: false, error: verificationData.message || 'Payment verification failed.' };
-        }
-        
-        const metadata = verificationData.data.metadata;
-        if (!metadata) {
-            return { success: false, error: 'Transaction metadata is missing or corrupt.'}
-        }
-        
-        const amountPaid = verificationData.data.amount / 100;
-        const transactionDate = new Date(verificationData.data.paid_at || verificationData.data.transaction_date).toISOString();
-
-        if (metadata.isPosSale) {
-            const posSaleData: PosSaleData = {
-                items: metadata.cart,
-                customerName: metadata.customer_name,
-                paymentMethod: 'Paystack',
-                staffId: metadata.staff_id,
-                staffName: metadata.staff_name,
-                total: amountPaid,
-                date: transactionDate,
-            };
-            return await handlePosSale(posSaleData);
-        }
-        
-        if (metadata.isDebtPayment) {
-            if (!metadata.runId || !metadata.customerId) {
-                 return { success: false, error: 'Metadata for debt payment is incomplete.'}
-            }
-            await runTransaction(db, async (transaction) => {
-                const runRef = doc(db, 'transfers', metadata.runId);
-                const customerRef = doc(db, 'customers', metadata.customerId);
-                transaction.update(runRef, { totalCollected: increment(amountPaid) });
-                transaction.update(customerRef, { amountPaid: increment(amountPaid) });
-            });
-            return { success: true, orderId: `debt-payment-${reference}` };
-        }
-
-        if (metadata.runId) {
-             const saleData: SaleData = {
-                runId: metadata.runId,
-                items: metadata.cart,
-                customerId: metadata.customerId || 'walk-in',
-                customerName: metadata.customer_name,
-                paymentMethod: 'Paystack',
-                staffId: metadata.staff_id,
-                total: amountPaid,
-            };
-            return await handleSellToCustomer(saleData);
-        }
-        
-        return { success: false, error: 'Could not determine transaction type from metadata.'}
-
-
-    } catch (error) {
-        console.error("Error finalizing order:", error);
-        return { success: false, error: "Failed to finalize the order after payment verification." };
     }
 }
 

@@ -51,13 +51,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { collection, getDocs, doc, runTransaction, increment, getDoc, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { handlePosSale, initializePaystackTransaction, verifyPaystackOnServerAndFinalizeOrder } from "@/app/actions";
+import { handlePosSale, initializePaystackTransaction } from "@/app/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment, PaymentMethod } from "./types";
 import { ProductEditDialog } from "@/app/dashboard/components/product-edit-dialog";
 
 
-const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeAddress?: string, partialPayments?: PartialPayment[] }>(({ order, storeAddress, partialPayments }, ref) => {
+const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeAddress?: string }>(({ order, storeAddress }, ref) => {
     return (
         <div ref={ref} className="p-2">
             <div className="text-center mb-4">
@@ -68,7 +68,7 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
             <div className="py-2 space-y-2 text-xs">
                 <div className="space-y-1">
                     <p><strong>Order ID:</strong> {order.id.substring(0, 12)}...</p>
-                    <p><strong>Date:</strong> {order.date.toLocaleString()}</p>
+                    <p><strong>Date:</strong> {new Date(order.date).toLocaleString()}</p>
                     <p><strong>Payment Method:</strong> {order.paymentMethod}</p>
                     <p><strong>Customer:</strong> {order.customerName || 'Walk-in'}</p>
                 </div>
@@ -92,11 +92,11 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
                     </TableBody>
                 </Table>
                 <Separator className="my-2"/>
-                 {partialPayments && partialPayments.length > 1 && (
+                 {order.paymentMethod === 'Split' && order.partialPayments && (
                     <div className="w-full space-y-1 text-sm pr-1">
                         <h3 className="font-semibold">Payment Details:</h3>
-                        {partialPayments.map((p, index) => (
-                            <div key={index} className="flex justify-between">
+                        {order.partialPayments.map((p, i) => (
+                            <div key={i} className="flex justify-between">
                                 <span>{p.method}:</span>
                                 <span>₦{p.amount.toFixed(2)}</span>
                             </div>
@@ -138,19 +138,19 @@ const handlePrint = (node: HTMLElement | null) => {
                 </head>
                 <body>
                     ${content}
-                    <script>
-                        window.onload = function() {
-                            window.print();
-                            // Use a timeout to ensure the print dialog has time to open before we close the window
-                            setTimeout(function() {
-                                window.close();
-                            }, 500);
-                        };
-                    </script>
                 </body>
             </html>
         `);
         printWindow.document.close();
+        
+        printWindow.onload = function() {
+            printWindow.focus();
+            printWindow.print();
+            // Use a timeout to ensure the print dialog has time to open before we close the window
+            setTimeout(function() {
+                printWindow.close();
+            }, 500);
+        };
     } else {
         alert('Please allow popups for this website');
     }
@@ -231,24 +231,25 @@ function SplitPaymentDialog({
   total,
   onFinalize,
   onHold,
+  user
 }: {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   total: number
   onFinalize: (payments: PartialPayment[]) => void
   onHold: (cart: CartItem[], payments: PartialPayment[]) => void
+  user: User | null;
 }) {
-  const [payments, setPayments] = useState<PartialPayment[]>([])
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [payments, setPayments] = useState<PartialPayment[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
   const { toast } = useToast();
-  const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setPayments([{ id: Date.now(), method: '', amount: total, confirmed: false }]);
     }
   }, [isOpen, total]);
-
+  
   const totalPaid = useMemo(() => {
     return payments.reduce(
         (acc, p) => acc + (p.confirmed ? Number(p.amount) : 0),
@@ -334,34 +335,100 @@ function SplitPaymentDialog({
         setPayments(remainingPayments);
     }
   }
+  
+  const handleConfirmPayment = (id: number) => {
+    const payment = payments.find(p => p.id === id);
+    if (!payment || !user) return;
+    
+    if (payment.method === 'Paystack') {
+        handlePaystackPartialPayment(payment);
+    } else {
+        // For Cash and POS, just confirm locally
+        confirmPayment(id);
+    }
+  };
 
-  const confirmPayment = (id: number) => {
+  const handlePaystackPartialPayment = async (payment: PartialPayment) => {
+    if (!user) return;
+    
+    setIsSubmitting(payment.id);
+    const initResult = await initializePaystackTransaction({
+        email: user.email,
+        total: payment.amount,
+        customerName: 'POS Split Payment',
+        staffId: user.staff_id,
+        items: [],
+        isPosSale: true,
+        isPartialPayment: true,
+    });
+    
+    if (initResult.success && initResult.reference) {
+        const PaystackPop = (await import('@paystack/inline-js')).default;
+        const paystack = new PaystackPop();
+        paystack.newTransaction({
+            key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+            email: user.email,
+            amount: Math.round(payment.amount * 100),
+            ref: initResult.reference,
+            onSuccess: () => {
+                confirmPayment(payment.id, true);
+                setIsSubmitting(null);
+            },
+            onClose: () => {
+                toast({ variant: "destructive", title: "Payment Cancelled" });
+                setIsSubmitting(null);
+            }
+        });
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: initResult.error || 'Could not initialize payment.' });
+        setIsSubmitting(null);
+    }
+  };
+
+  const confirmPayment = (id: number, isVerified = false) => {
     const payment = payments.find(p => p.id === id);
     if (!payment) return;
+    
+    if (payment.method !== 'Paystack' && !isVerified) {
+        // Show confirmation dialog for non-paystack methods
+         setPayments(prevPayments => {
+            const newPayments = prevPayments.map((p) => (p.id === id ? { ...p, confirmed: true } : p));
+            const newTotalPaid = newPayments.filter(p => p.confirmed).reduce((sum, p) => sum + p.amount, 0);
+            const newRemaining = total - newTotalPaid;
+            const unconfirmed = newPayments.filter(p => !p.confirmed);
+            
+            if (unconfirmed.length > 0) {
+                const amountPerField = newRemaining / unconfirmed.length;
+                return newPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p);
+            }
+            return newPayments;
+        });
 
-    if (payment.amount > remainingTotal + 0.01) {
-        toast({ variant: 'destructive', title: 'Overpayment', description: `Cannot confirm payment greater than remaining balance of ₦${remainingTotal.toFixed(2)}.` });
+        toast({title: "Payment Confirmed", description: `Confirmed ₦${payment.amount.toFixed(2)} via ${payment.method}.`})
         return;
     }
+    
+    if (isVerified) {
+        // This is for paystack callback
+         setPayments(prevPayments => {
+            const newPayments = prevPayments.map((p) => (p.id === id ? { ...p, confirmed: true } : p));
+            const newTotalPaid = newPayments.filter(p => p.confirmed).reduce((sum, p) => sum + p.amount, 0);
+            const newRemaining = total - newTotalPaid;
+            const unconfirmed = newPayments.filter(p => !p.confirmed);
+            
+            if (unconfirmed.length > 0) {
+                const amountPerField = newRemaining / unconfirmed.length;
+                return newPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p);
+            }
+            return newPayments;
+        });
 
-    setPayments(prevPayments => {
-        const newPayments = prevPayments.map((p) => (p.id === id ? { ...p, confirmed: true } : p));
-        const newTotalPaid = newPayments.filter(p => p.confirmed).reduce((sum, p) => sum + p.amount, 0);
-        const newRemaining = total - newTotalPaid;
-        const unconfirmed = newPayments.filter(p => !p.confirmed);
-        
-        if (unconfirmed.length > 0) {
-            const amountPerField = newRemaining / unconfirmed.length;
-            return newPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p);
-        }
-        return newPayments;
-    });
-
-    toast({title: "Payment Confirmed", description: `Confirmed ₦${payment.amount.toFixed(2)} via ${payment.method}.`})
+        toast({title: "Paystack Payment Confirmed", description: `Received ₦${payment.amount.toFixed(2)}.`})
+    }
   }
 
-  const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack']
-  const usedMethods = payments.map((p) => p.method)
+
+  const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack'];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -381,51 +448,53 @@ function SplitPaymentDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4 max-h-80 overflow-y-auto">
-          {payments.map((payment, index) => (
-            <div
-              key={payment.id}
-              className="grid grid-cols-[1fr_120px_auto_auto] items-center gap-2"
-            >
-              <Select
-                value={payment.method}
-                onValueChange={(value: PaymentMethod | '') =>
-                  handleMethodChange(payment.id, value)
-                }
-                disabled={payment.confirmed}
+          {payments.map((payment, index) => {
+            const usedMethods = payments.filter(p => p.id !== payment.id).map(p => p.method);
+            return (
+              <div
+                key={payment.id}
+                className="grid grid-cols-[1fr_120px_auto_auto] items-center gap-2"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Method..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableMethods.map((method) => (
-                    <SelectItem
-                      key={method}
-                      value={method}
-                      disabled={usedMethods.includes(method) && payment.method !== method}
-                    >
-                      {method}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="number"
-                placeholder="Amount"
-                value={payment.amount}
-                onChange={(e) => handleAmountChange(payment.id, e.target.value)}
-                disabled={payment.confirmed}
-              />
-               <AlertDialog>
+                <Select
+                  value={payment.method}
+                  onValueChange={(value: PaymentMethod | '') =>
+                    handleMethodChange(payment.id, value)
+                  }
+                  disabled={payment.confirmed}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Method..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMethods.map((method) => (
+                      <SelectItem
+                        key={method}
+                        value={method}
+                        disabled={usedMethods.includes(method)}
+                      >
+                        {method}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  placeholder="Amount"
+                  value={payment.amount.toFixed(2)}
+                  onChange={(e) => handleAmountChange(payment.id, e.target.value)}
+                  disabled={payment.confirmed}
+                />
+                 <AlertDialog>
                     <AlertDialogTrigger asChild>
                         <Button
                             size="icon"
                             variant={payment.confirmed ? "ghost" : "outline"}
-                            disabled={payment.confirmed || !payment.method || !payment.amount}
+                            disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
                         >
-                            {payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />}
+                            {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
                         </Button>
                     </AlertDialogTrigger>
-                    {!payment.confirmed &&
+                     {!payment.confirmed && payment.method !== 'Paystack' && (
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
@@ -436,18 +505,19 @@ function SplitPaymentDialog({
                                 <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
-                    }
+                    )}
                 </AlertDialog>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => removePaymentMethod(payment.id)}
-                disabled={payment.confirmed}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
+
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removePaymentMethod(payment.id)}
+                  disabled={payment.confirmed}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            )})}
           <div className="flex justify-start">
              <Button
                 variant="outline"
@@ -467,11 +537,8 @@ function SplitPaymentDialog({
                 onClick={() => onFinalize(payments)}
                 disabled={!allConfirmed}
             >
-                {isSubmitting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                    <Check className="mr-2 h-4 w-4" />
-                )}
+                {isSubmitting === 0 && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Check className="mr-2 h-4 w-4" />
                 Finalize Sale
             </Button>
         </DialogFooter>
@@ -493,7 +560,6 @@ function POSPageContent() {
   const [customerEmail, setCustomerEmail] = useLocalStorage('posCustomerEmail', '');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastCompletedOrder, setLastCompletedOrder] = useState<CompletedOrder | null>(null);
-  const [lastPartialPayments, setLastPartialPayments] = useState<PartialPayment[]>([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [storeAddress, setStoreAddress] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
@@ -566,9 +632,8 @@ function POSPageContent() {
     setCustomerEmail('');
   }, [setCart, setCustomerName, setCustomerEmail]);
   
-  const handleSaleMade = useCallback((order: CompletedOrder, partialPayments: PartialPayment[] = []) => {
+  const handleSaleMade = useCallback((order: CompletedOrder) => {
       setLastCompletedOrder(order);
-      setLastPartialPayments(partialPayments);
       setIsReceiptOpen(true);
       clearCartAndStorage();
       setPaymentStatus('idle');
@@ -601,13 +666,13 @@ function POSPageContent() {
       }
     };
     initializePos();
-  }, []);
+  }, [selectedStaffId]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
     if (selectedStaffId) {
         fetchProductsForStaff(selectedStaffId).then(unsub => {
-            unsubscribe = unsub;
+            if (unsub) unsubscribe = unsub;
         });
     } else {
         setProducts([]);
@@ -640,6 +705,7 @@ function POSPageContent() {
         items: itemsWithCost,
         total: total,
         paymentMethod: 'Split' as 'Split',
+        partialPayments: payments.filter(p => p.confirmed).map(({id, confirmed, ...rest}) => rest),
         customerName: customerName || 'Walk-in',
         staffId: selectedStaffId,
         staffName: staffName,
@@ -647,20 +713,20 @@ function POSPageContent() {
     };
     
     const result = await handlePosSale(saleData);
-    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
     if (result.success && result.orderId) {
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
             total: total,
-            date: new Date(),
+            date: new Date().toISOString(),
             paymentMethod: 'Split',
+            partialPayments: payments.filter(p => p.confirmed).map(({id, confirmed, ...rest}) => rest),
             customerName: customerName || 'Walk-in',
             status: 'Completed',
-            subtotal, tax: 0
+            subtotal: total, tax: 0
         };
-        handleSaleMade(completedOrder, payments);
+        handleSaleMade(completedOrder);
         toast({ title: 'Sale Recorded', description: 'Split payment order has been successfully recorded.' });
     } else {
         toast({ variant: "destructive", title: "Order Failed", description: result.error || "Could not complete the sale." });
@@ -702,18 +768,17 @@ function POSPageContent() {
     };
     
     const result = await handlePosSale(saleData);
-    const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
     if (result.success && result.orderId) {
         const completedOrder: CompletedOrder = {
             id: result.orderId,
             items: cart,
             total,
-            date: new Date(),
+            date: new Date().toISOString(),
             paymentMethod: method,
             customerName: customerName || 'Walk-in',
             status: 'Completed',
-            subtotal, tax: 0
+            subtotal: total, tax: 0
         };
         handleSaleMade(completedOrder);
         toast({ title: 'Sale Recorded', description: 'Order has been successfully recorded.' });
@@ -757,24 +822,33 @@ function POSPageContent() {
             ref: initResult.reference,
             onSuccess: async (transaction) => {
                 setPaymentStatus('processing');
-                const verifyResult = await verifyPaystackOnServerAndFinalizeOrder(transaction.reference);
-                const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-                if (verifyResult.success && verifyResult.orderId) {
-                     const completedOrder: CompletedOrder = {
-                        id: verifyResult.orderId,
+                const saleData = {
+                    items: itemsWithCost,
+                    total: total,
+                    paymentMethod: 'Paystack' as 'Paystack',
+                    customerName: customerName || 'Walk-in',
+                    staffId: selectedStaffId,
+                    staffName,
+                    date: new Date().toISOString()
+                };
+                const result = await handlePosSale(saleData);
+
+                if (result.success && result.orderId) {
+                    const completedOrder: CompletedOrder = {
+                        id: result.orderId,
                         items: cart,
                         total,
-                        date: new Date(),
+                        date: new Date().toISOString(),
                         paymentMethod: 'Paystack',
                         customerName: customerName || 'Walk-in',
                         status: 'Completed',
-                        subtotal, tax: 0
+                        subtotal: total, tax: 0
                     };
                     handleSaleMade(completedOrder);
                     toast({ title: "Payment Successful", description: "Order has been verified and completed." });
                     setPaymentStatus('success');
                 } else {
-                    toast({ variant: "destructive", title: "Verification Failed", description: verifyResult.error || "Could not verify payment." });
+                    toast({ variant: "destructive", title: "Verification Failed", description: result.error || "Could not verify payment." });
                     setPaymentStatus('failed');
                 }
             },
@@ -1241,6 +1315,7 @@ function POSPageContent() {
                 setIsSplitPaymentOpen(false);
                 toast({ title: "Order Held", description: "The current cart and its partial payments have been saved." });
             }}
+            user={user}
         />
 
         {/* Receipt Dialog */}
@@ -1249,7 +1324,7 @@ function POSPageContent() {
                 <DialogHeader>
                    <DialogTitle className="sr-only">Sale Receipt</DialogTitle>
                 </DialogHeader>
-                {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} partialPayments={lastPartialPayments} ref={receiptRef} />}
+                {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} />}
                 <DialogFooter className="flex-row justify-end gap-2 print:hidden">
                     <Button variant="outline" onClick={() => handlePrint(receiptRef.current)}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                     <DialogClose asChild>
@@ -1273,3 +1348,4 @@ function POSPageWithSuspense() {
 export default function POSPageWithTypes() {
   return <POSPageWithSuspense />;
 }
+

@@ -9,6 +9,8 @@ export type Product = {
   image: string;
   'data-ai-hint': string;
   costPrice?: number;
+  minPrice?: number;
+  maxPrice?: number;
 };
 
 export type CartItem = {
@@ -27,6 +29,7 @@ export type CompletedOrder = {
   total: number;
   date: string; // Changed to string to ensure consistency
   paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit' | 'Split';
+  partialPayments?: { method: string, amount: number }[];
   customerName?: string;
   status: 'Completed' | 'Pending' | 'Cancelled';
 };
@@ -46,7 +49,7 @@ export type SelectableStaff = {
 
 export type PaymentMethod = 'Cash' | 'POS' | 'Paystack';
 
-export type PartialPayment = {
+export interface PartialPayment {
     id: number;
     method: PaymentMethod | '';
     amount: number;
