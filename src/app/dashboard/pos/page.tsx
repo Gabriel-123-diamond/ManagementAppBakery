@@ -434,10 +434,19 @@ function SplitPaymentDialog({
 
 
   const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack'];
+  
+  const handleDialogInteractOutside = (event: Event) => {
+    // Check if the event target is inside the Paystack iframe
+    const target = event.target as HTMLElement;
+    if (target.closest('iframe[src*="paystack.com"]')) {
+      return; // Do not prevent default if it's the Paystack modal
+    }
+    event.preventDefault();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-md" onInteractOutside={handleDialogInteractOutside}>
         <DialogHeader>
           <DialogTitle>Split Payment</DialogTitle>
           <DialogDescription>
@@ -548,7 +557,7 @@ function SplitPaymentDialog({
           </div>
         </div>
         <DialogFooter className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" onClick={() => onHold(payments)} disabled={allConfirmed}>
+            <Button variant="secondary" onClick={() => { onHold(payments); onOpenChange(false); }} disabled={allConfirmed}>
                 <Hand className="mr-2 h-4 w-4" /> Hold Order
             </Button>
              <Button
@@ -1325,7 +1334,7 @@ function POSPageContent() {
             onOpenChange={setIsSplitPaymentOpen}
             total={total}
             onFinalize={handleFinalizeSplitOrder}
-            onHold={(payments) => holdOrder(payments)}
+            onHold={(payments) => {holdOrder(payments); setIsSplitPaymentOpen(false);}}
             user={user}
         />
 
@@ -1336,7 +1345,7 @@ function POSPageContent() {
                 <DialogFooter className="flex-row justify-end gap-2 print:hidden">
                     <Button variant="outline" onClick={() => handlePrint(receiptRef.current)}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                     <DialogClose asChild>
-                      <Button onClick={() => setIsReceiptOpen(false)}>Close</Button>
+                      <Button onClick={() => {setIsReceiptOpen(false); setLastCompletedOrder(null);}}>Close</Button>
                     </DialogClose>
                 </DialogFooter>
             </DialogContent>
@@ -1356,5 +1365,3 @@ function POSPageWithSuspense() {
 export default function POSPageWithTypes() {
   return <POSPageWithSuspense />;
 }
-
-    
