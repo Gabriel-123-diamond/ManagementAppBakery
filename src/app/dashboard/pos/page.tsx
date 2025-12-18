@@ -436,10 +436,9 @@ function SplitPaymentDialog({
   const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack'];
   
   const handleDialogInteractOutside = (event: Event) => {
-    // Check if the event target is inside the Paystack iframe
     const target = event.target as HTMLElement;
     if (target.closest('iframe[src*="paystack.com"]')) {
-      return; // Do not prevent default if it's the Paystack modal
+      return; 
     }
     event.preventDefault();
   };
@@ -746,7 +745,7 @@ function POSPageContent() {
             id: result.orderId,
             items: cart,
             total: total,
-            date: new Date().toISOString(),
+            date: new Date(),
             paymentMethod: 'Split',
             partialPayments: payments.filter(p => p.confirmed).map(({id, confirmed, ...rest}) => rest),
             customerName: customerName || 'Walk-in',
@@ -801,7 +800,7 @@ function POSPageContent() {
             id: result.orderId,
             items: cart,
             total,
-            date: new Date().toISOString(),
+            date: new Date(),
             paymentMethod: method,
             customerName: customerName || 'Walk-in',
             status: 'Completed',
@@ -865,7 +864,7 @@ function POSPageContent() {
                         id: result.orderId,
                         items: cart,
                         total,
-                        date: new Date().toISOString(),
+                        date: new Date(),
                         paymentMethod: 'Paystack',
                         customerName: customerName || 'Walk-in',
                         status: 'Completed',
@@ -951,7 +950,7 @@ function POSPageContent() {
   const holdOrder = (partialPayments: PartialPayment[] = []) => {
     if (cart.length === 0) return;
     const orderToHold = [...cart];
-    (orderToHold as any).partialPayments = partialPayments;
+    (orderToHold as any).partialPayments = partialPayments.filter(p => p.confirmed);
     setHeldOrders(prev => [...prev, [orderToHold]]);
     clearCartAndStorage();
     toast({ title: "Order Held", description: "The current cart has been saved." });

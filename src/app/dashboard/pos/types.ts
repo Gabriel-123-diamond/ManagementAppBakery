@@ -11,6 +11,7 @@ export type Product = {
   costPrice?: number;
   minPrice?: number;
   maxPrice?: number;
+  lowStockThreshold?: number;
 };
 
 export type CartItem = {
@@ -27,7 +28,7 @@ export type CompletedOrder = {
   subtotal: number;
   tax: number;
   total: number;
-  date: string; // Changed to string to ensure consistency
+  date: Date; // Changed to Date to ensure consistency
   paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit' | 'Split';
   partialPayments?: { method: string, amount: number }[];
   customerName?: string;
