@@ -48,6 +48,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { DateRange } from "react-day-picker";
@@ -79,7 +80,8 @@ type CompletedOrder = {
   tax: number;
   total: number;
   date: Timestamp;
-  paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit';
+  paymentMethod: 'POS' | 'Cash' | 'Paystack' | 'Credit' | 'Split';
+  partialPayments?: { method: string, amount: number }[];
   customerName?: string;
   staffId?: string;
   staffName?: string;
@@ -113,10 +115,24 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
             <div className="text-xs text-muted-foreground">
                 <p><strong>Order ID:</strong> {order.id}</p>
                 <p><strong>Date:</strong> {order.date.toDate().toLocaleString()}</p>
-                <p><strong>Payment Method:</strong> {order.paymentMethod}</p>
+                 <p><strong>Payment Method:</strong> {order.paymentMethod}</p>
                 <p><strong>Customer:</strong> {order.customerName || 'Walk-in'}</p>
             </div>
             <Separator className="my-2"/>
+            {order.paymentMethod === 'Split' && order.partialPayments && (
+                <>
+                <div className="text-xs">
+                    <h4 className="font-semibold mb-1">Payment Breakdown:</h4>
+                    {order.partialPayments.map((p, i) => (
+                        <div key={i} className="flex justify-between">
+                            <span>{p.method}:</span>
+                            <span>{formatCurrency(p.amount)}</span>
+                        </div>
+                    ))}
+                </div>
+                <Separator className="my-2"/>
+                </>
+            )}
             <Table>
                 <TableHeader>
                     <TableRow>
@@ -152,48 +168,38 @@ Receipt.displayName = 'Receipt';
 
 const handlePrint = (node: HTMLElement | null) => {
     if (!node) return;
+    const content = node.innerHTML;
     const printWindow = window.open('', '_blank');
+    
     if (printWindow) {
-        const printableContent = `
+        printWindow.document.write(`
             <html>
                 <head>
                     <title>Receipt</title>
                     <style>
-                        body { font-family: sans-serif; margin: 20px; }
-                        .receipt-container { max-width: 300px; margin: auto; }
-                        .text-center { text-align: center; }
-                        .font-bold { font-weight: bold; }
-                        .text-lg { font-size: 1.125rem; }
-                        .text-2xl { font-size: 1.5rem; }
-                        .my-4 { margin-top: 1rem; margin-bottom: 1rem; }
-                        .text-sm { font-size: 0.875rem; }
-                        .text-xs { font-size: 0.75rem; }
-                        .text-muted-foreground { color: #6b7280; }
-                        table { width: 100%; border-collapse: collapse; }
-                        th, td { padding: 4px 0; }
-                        .text-right { text-align: right; }
-                        .flex { display: flex; }
-                        .justify-between { justify-content: space-between; }
-                        hr { border: 0; border-top: 1px dashed #d1d5db; margin: 1rem 0; }
+                        @media print {
+                            @page { margin: 0; size: 80mm auto; }
+                            body { font-family: sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="receipt-container">
-                        ${node.innerHTML}
-                    </div>
+                    ${content}
                     <script>
                         window.onload = function() {
                             window.print();
-                            window.onafterprint = function() {
+                            // Use a timeout to ensure the print dialog has time to open before we close the window
+                            setTimeout(function() {
                                 window.close();
-                            };
+                            }, 500);
                         };
                     </script>
                 </body>
             </html>
-        `;
-        printWindow.document.write(printableContent);
+        `);
         printWindow.document.close();
+    } else {
+        alert('Please allow popups for this website');
     }
 };
 
@@ -334,9 +340,27 @@ function OrdersTable({ orders, onSelectOne, onSelectAll, selectedOrders, allOrde
                             {!isShowroomStaff && <TableCell>{order.staffName || 'N/A'}</TableCell>}
                             <TableCell>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
                             <TableCell>
-                                <Badge variant={'secondary'}>
-                                    {order.paymentMethod}
-                                </Badge>
+                                {order.paymentMethod === 'Split' ? (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger>
+                                                <Badge variant="secondary" className="cursor-pointer">Split</Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <div className="text-xs space-y-1">
+                                                    {order.partialPayments?.map((p, i) => (
+                                                        <div key={i} className="flex justify-between gap-2">
+                                                            <span>{p.method}:</span>
+                                                            <span className="font-semibold">{formatCurrency(p.amount)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                ) : (
+                                    <Badge variant={'secondary'}>{order.paymentMethod}</Badge>
+                                )}
                             </TableCell>
                             <TableCell>
                                 <Badge variant={getStatusVariant(order.status)}>
@@ -738,7 +762,8 @@ function RegularOrdersPage() {
                                 <SelectItem value="all">All Payments</SelectItem>
                                 <SelectItem value="Cash">Cash</SelectItem>
                                 <SelectItem value="POS">POS</SelectItem>
-                                <SelectItem value="Paystack">Transfer</SelectItem>
+                                <SelectItem value="Paystack">Paystack</SelectItem>
+                                <SelectItem value="Split">Split</SelectItem>
                                 {!isShowroomStaff && <SelectItem value="Credit">Credit</SelectItem>}
                             </SelectContent>
                         </Select>

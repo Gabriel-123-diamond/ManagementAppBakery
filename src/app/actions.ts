@@ -2589,10 +2589,15 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
 }
 
 
+type PartialPayment = {
+    method: 'Cash' | 'POS' | 'Paystack' | '';
+    amount: number;
+}
 type PosSaleData = {
     items: { productId: string; quantity: number; price: number, name: string, costPrice: number }[];
     customerName: string;
     paymentMethod: 'Cash' | 'POS' | 'Paystack' | 'Split';
+    partialPayments?: PartialPayment[];
     staffId: string;
     staffName: string;
     total: number;
@@ -2627,6 +2632,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 items: data.items,
                 total: data.total,
                 paymentMethod: data.paymentMethod,
+                partialPayments: data.partialPayments || null,
                 date: Timestamp.fromDate(orderDate),
                 staffId: data.staffId,
                 staffName: data.staffName,
@@ -2639,25 +2645,37 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
-            const paymentField = data.paymentMethod === 'Cash' ? 'cash' : (data.paymentMethod === 'POS' ? 'pos' : 'transfer');
+             // Create individual sales entries based on payment methods
+            const paymentMethods = data.paymentMethod === 'Split' && data.partialPayments 
+                ? data.partialPayments 
+                : [{ method: data.paymentMethod, amount: data.total }];
+
+            const dailyTotals: Record<string, number> = {};
+            let totalSale = 0;
+
+            for (const payment of paymentMethods) {
+                const methodKey = (payment.method.toLowerCase() === 'paystack') ? 'transfer' : payment.method.toLowerCase();
+                if (methodKey) {
+                    dailyTotals[methodKey] = (dailyTotals[methodKey] || 0) + payment.amount;
+                    totalSale += payment.amount;
+                }
+            }
             
             if (salesDoc.exists()) {
-                transaction.update(salesDocRef, {
-                    total: increment(data.total),
-                    [paymentField]: increment(data.total)
-                });
+                const updates: Record<string, any> = { total: increment(totalSale) };
+                for (const key in dailyTotals) {
+                    updates[key] = increment(dailyTotals[key]);
+                }
+                transaction.update(salesDocRef, updates);
             } else {
-                transaction.set(salesDocRef, {
+                const initialData = {
                     date: Timestamp.fromDate(startOfDay(orderDate)),
                     description: `Daily Sales for ${salesDocId}`,
-                    cash: 0,
-                    pos: 0,
-                    transfer: 0,
-                    creditSales: 0,
-                    shortage: 0,
-                    total: data.total,
-                    [paymentField]: data.total
-                });
+                    cash: 0, pos: 0, transfer: 0, creditSales: 0, shortage: 0,
+                    ...dailyTotals,
+                    total: totalSale,
+                };
+                transaction.set(salesDocRef, initialData);
             }
         });
 
@@ -2884,6 +2902,7 @@ export async function initializePaystackTransaction(data: any): Promise<{ succes
             cart: data.items,
             isPosSale: data.isPosSale || false,
             isDebtPayment: data.isDebtPayment || false,
+            isPartialPayment: data.isPartialPayment || false,
             runId: data.runId || null,
             customerId: data.customerId || null,
         };
@@ -3326,3 +3345,4 @@ export async function returnUnusedIngredients(
         return { success: false, error: (error as Error).message };
     }
 }
+
