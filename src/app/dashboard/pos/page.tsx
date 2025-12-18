@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
@@ -67,7 +68,7 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
             <div className="py-2 space-y-2 text-xs">
                 <div className="space-y-1">
                     <p><strong>Order ID:</strong> {order.id.substring(0, 12)}...</p>
-                    <p><strong>Date:</strong> {new Date(order.date).toLocaleString()}</p>
+                    <p><strong>Date:</strong> {order.date.toLocaleString()}</p>
                     <p><strong>Payment Method:</strong> {order.paymentMethod}</p>
                     <p><strong>Customer:</strong> {order.customerName || 'Walk-in'}</p>
                 </div>
@@ -237,11 +238,16 @@ function SplitPaymentDialog({
   onFinalize: (payments: PartialPayment[]) => void
   onHold: (cart: CartItem[], payments: PartialPayment[]) => void
 }) {
-  const [payments, setPayments] = useState<PartialPayment[]>([
-    { id: 1, method: '', amount: total, confirmed: false },
-  ])
+  const [payments, setPayments] = useState<PartialPayment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const receiptRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setPayments([{ id: Date.now(), method: '', amount: total, confirmed: false }]);
+    }
+  }, [isOpen, total]);
 
   const totalPaid = useMemo(() => {
     return payments.reduce(
@@ -267,37 +273,32 @@ function SplitPaymentDialog({
   const handleAmountChange = (id: number, amountStr: string) => {
     const newAmount = parseFloat(amountStr) || 0;
     
-    // Validation
-    const unconfirmedTotal = payments.filter(p => !p.confirmed).reduce((sum, p) => sum + Number(p.amount), 0);
     const availableToAllocate = total - totalPaid;
     
-    const currentTotalOfUnconfirmed = payments
+    const currentTotalOfOtherUnconfirmed = payments
         .filter(p => !p.confirmed && p.id !== id)
         .reduce((sum, p) => sum + Number(p.amount), 0);
     
-    if (newAmount > availableToAllocate - currentTotalOfUnconfirmed) {
-        toast({ variant: 'destructive', title: 'Invalid Amount', description: `Amount cannot exceed remaining balance.` });
+    if (newAmount > availableToAllocate) {
+        toast({ variant: 'destructive', title: 'Invalid Amount', description: `Amount cannot exceed remaining balance of ₦${availableToAllocate.toFixed(2)}.` });
         return;
     }
 
     setPayments(prevPayments => {
-        let newPayments = prevPayments.map(p => p.id === id ? { ...p, amount: newAmount } : p);
-        const unconfirmedUnedited = newPayments.filter(p => !p.confirmed && p.id !== id);
-        
-        if(unconfirmedUnedited.length > 0) {
-            const remainingToDistribute = availableToAllocate - newAmount - unconfirmedUnedited.reduce((sum, p) => sum + Number(p.amount), 0);
-            
-            // Distribute remaining amount among other unconfirmed fields
-            let distributionAmount = unconfirmedUnedited.length > 0 ? remainingToDistribute / unconfirmedUnedited.length : 0;
-            
-            newPayments = newPayments.map(p => {
-                if (unconfirmedUnedited.some(u => u.id === p.id)) {
-                    return { ...p, amount: Number(p.amount) + distributionAmount };
+        let tempPayments = prevPayments.map(p => p.id === id ? { ...p, amount: newAmount } : p);
+        const remainingToDistribute = availableToAllocate - newAmount;
+        const otherUnconfirmed = tempPayments.filter(p => !p.confirmed && p.id !== id);
+
+        if (otherUnconfirmed.length > 0) {
+            const amountPerField = remainingToDistribute / otherUnconfirmed.length;
+            return tempPayments.map(p => {
+                if (otherUnconfirmed.some(u => u.id === p.id)) {
+                    return { ...p, amount: amountPerField };
                 }
                 return p;
             });
         }
-        return newPayments;
+        return tempPayments;
     });
 };
 
@@ -306,7 +307,9 @@ function SplitPaymentDialog({
         toast({variant: 'destructive', title: "Balance Cleared", description: "The total amount has already been paid."});
         return;
     }
-    const newAmount = remainingTotal / (payments.filter(p => !p.confirmed).length + 1);
+    
+    const unconfirmedPayments = payments.filter(p => !p.confirmed);
+    const newAmount = remainingTotal / (unconfirmedPayments.length + 1);
 
     const updatedPayments = payments.map(p => !p.confirmed ? {...p, amount: newAmount} : p);
     
@@ -321,21 +324,40 @@ function SplitPaymentDialog({
     if (!paymentToRemove || paymentToRemove.confirmed) return;
     
     const remainingPayments = payments.filter((p) => p.id !== id);
+    const amountToRedistribute = paymentToRemove.amount;
     
     const unconfirmedPayments = remainingPayments.filter(p => !p.confirmed);
     if (unconfirmedPayments.length > 0) {
-        const totalToDistribute = total - totalPaid;
-        const amountPerField = totalToDistribute / unconfirmedPayments.length;
-        setPayments(remainingPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p));
+        const amountPerField = amountToRedistribute / unconfirmedPayments.length;
+        setPayments(remainingPayments.map(p => !p.confirmed ? { ...p, amount: p.amount + amountPerField } : p));
     } else {
         setPayments(remainingPayments);
     }
   }
 
   const confirmPayment = (id: number) => {
-    setPayments(
-      payments.map((p) => (p.id === id ? { ...p, confirmed: true } : p))
-    )
+    const payment = payments.find(p => p.id === id);
+    if (!payment) return;
+
+    if (payment.amount > remainingTotal + 0.01) {
+        toast({ variant: 'destructive', title: 'Overpayment', description: `Cannot confirm payment greater than remaining balance of ₦${remainingTotal.toFixed(2)}.` });
+        return;
+    }
+
+    setPayments(prevPayments => {
+        const newPayments = prevPayments.map((p) => (p.id === id ? { ...p, confirmed: true } : p));
+        const newTotalPaid = newPayments.filter(p => p.confirmed).reduce((sum, p) => sum + p.amount, 0);
+        const newRemaining = total - newTotalPaid;
+        const unconfirmed = newPayments.filter(p => !p.confirmed);
+        
+        if (unconfirmed.length > 0) {
+            const amountPerField = newRemaining / unconfirmed.length;
+            return newPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p);
+        }
+        return newPayments;
+    });
+
+    toast({title: "Payment Confirmed", description: `Confirmed ₦${payment.amount.toFixed(2)} via ${payment.method}.`})
   }
 
   const availableMethods: PaymentMethod[] = ['Cash', 'POS', 'Paystack']
@@ -358,7 +380,7 @@ function SplitPaymentDialog({
             </span>
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 max-h-80 overflow-y-auto">
           {payments.map((payment, index) => (
             <div
               key={payment.id}
@@ -397,22 +419,24 @@ function SplitPaymentDialog({
                     <AlertDialogTrigger asChild>
                         <Button
                             size="icon"
-                            variant="ghost"
+                            variant={payment.confirmed ? "ghost" : "outline"}
                             disabled={payment.confirmed || !payment.method || !payment.amount}
                         >
                             {payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />}
                         </Button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
-                            <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
+                    {!payment.confirmed &&
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
+                                <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    }
                 </AlertDialog>
               <Button
                 size="icon"
