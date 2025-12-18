@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
@@ -73,6 +72,20 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
                     <p><strong>Customer:</strong> {order.customerName || 'Walk-in'}</p>
                 </div>
                 <Separator className="my-2" />
+                {order.paymentMethod === 'Split' && order.partialPayments && (
+                    <>
+                    <div className="text-xs">
+                        <h4 className="font-semibold mb-1">Payment Details:</h4>
+                        {order.partialPayments.map((p, i) => (
+                            <div key={i} className="flex justify-between">
+                                <span>{p.method}:</span>
+                                <span>{`₦${p.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <Separator className="my-2"/>
+                    </>
+                )}
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -92,18 +105,7 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
                     </TableBody>
                 </Table>
                 <Separator className="my-2"/>
-                 {order.paymentMethod === 'Split' && order.partialPayments && (
-                    <div className="w-full space-y-1 text-sm pr-1">
-                        <h3 className="font-semibold">Payment Details:</h3>
-                        {order.partialPayments.map((p, i) => (
-                            <div key={i} className="flex justify-between">
-                                <span>{p.method}:</span>
-                                <span>₦{p.amount.toFixed(2)}</span>
-                            </div>
-                        ))}
-                         <Separator className="my-2"/>
-                    </div>
-                )}
+                 
                 <div className="w-full space-y-1 pr-1">
                     <div className="flex justify-between font-bold text-base mt-1">
                         <span>Total</span>
@@ -143,14 +145,26 @@ const handlePrint = (node: HTMLElement | null) => {
         `);
         printWindow.document.close();
         
-        printWindow.onload = function() {
-            printWindow.focus();
-            printWindow.print();
-            // Use a timeout to ensure the print dialog has time to open before we close the window
-            setTimeout(function() {
-                printWindow.close();
-            }, 500);
+        const tryPrint = () => {
+             try {
+                printWindow.focus();
+                printWindow.print();
+                setTimeout(() => {
+                    if (!printWindow.closed) {
+                       printWindow.close();
+                    }
+                }, 500);
+            } catch (e) {
+                console.error("Print failed:", e);
+                setTimeout(tryPrint, 500);
+            }
         };
+
+        if (document.readyState === 'complete') {
+            tryPrint();
+        } else {
+            printWindow.onload = tryPrint;
+        }
     } else {
         alert('Please allow popups for this website');
     }
@@ -388,10 +402,9 @@ function SplitPaymentDialog({
   const confirmPayment = (id: number, isVerified = false) => {
     const payment = payments.find(p => p.id === id);
     if (!payment) return;
-    
-    if (payment.method !== 'Paystack' && !isVerified) {
-        // Show confirmation dialog for non-paystack methods
-         setPayments(prevPayments => {
+
+    const confirmAction = () => {
+        setPayments(prevPayments => {
             const newPayments = prevPayments.map((p) => (p.id === id ? { ...p, confirmed: true } : p));
             const newTotalPaid = newPayments.filter(p => p.confirmed).reduce((sum, p) => sum + p.amount, 0);
             const newRemaining = total - newTotalPaid;
@@ -405,24 +418,16 @@ function SplitPaymentDialog({
         });
 
         toast({title: "Payment Confirmed", description: `Confirmed ₦${payment.amount.toFixed(2)} via ${payment.method}.`})
+    }
+    
+    if (payment.method !== 'Paystack' && !isVerified) {
+        confirmAction();
         return;
     }
     
     if (isVerified) {
         // This is for paystack callback
-         setPayments(prevPayments => {
-            const newPayments = prevPayments.map((p) => (p.id === id ? { ...p, confirmed: true } : p));
-            const newTotalPaid = newPayments.filter(p => p.confirmed).reduce((sum, p) => sum + p.amount, 0);
-            const newRemaining = total - newTotalPaid;
-            const unconfirmed = newPayments.filter(p => !p.confirmed);
-            
-            if (unconfirmed.length > 0) {
-                const amountPerField = newRemaining / unconfirmed.length;
-                return newPayments.map(p => !p.confirmed ? { ...p, amount: amountPerField } : p);
-            }
-            return newPayments;
-        });
-
+        confirmAction();
         toast({title: "Paystack Payment Confirmed", description: `Received ₦${payment.amount.toFixed(2)}.`})
     }
   }
@@ -480,33 +485,46 @@ function SplitPaymentDialog({
                 <Input
                   type="number"
                   placeholder="Amount"
-                  value={payment.amount.toFixed(2)}
+                  value={payment.amount > 0 ? payment.amount.toFixed(2) : ''}
                   onChange={(e) => handleAmountChange(payment.id, e.target.value)}
                   disabled={payment.confirmed}
                 />
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button
-                            size="icon"
-                            variant={payment.confirmed ? "ghost" : "outline"}
-                            disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
-                        >
-                            {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
-                        </Button>
-                    </AlertDialogTrigger>
-                     {!payment.confirmed && payment.method !== 'Paystack' && (
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
-                                <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    )}
-                </AlertDialog>
+                 
+                {payment.method === 'Paystack' ? (
+                     <Button
+                        size="icon"
+                        variant={payment.confirmed ? "ghost" : "outline"}
+                        onClick={() => handleConfirmPayment(payment.id)}
+                        disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
+                    >
+                         {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
+                    </Button>
+                ) : (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button
+                                size="icon"
+                                variant={payment.confirmed ? "ghost" : "outline"}
+                                disabled={payment.confirmed || !payment.method || !payment.amount || isSubmitting === payment.id}
+                            >
+                                {isSubmitting === payment.id ? <Loader2 className="h-4 w-4 animate-spin"/> : (payment.confirmed ? <Check className="h-4 w-4 text-green-500" /> : <Check className="h-4 w-4" />)}
+                            </Button>
+                        </AlertDialogTrigger>
+                         {!payment.confirmed && (
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Payment?</AlertDialogTitle>
+                                    <AlertDialogDescription>Confirm receipt of <strong>{`₦${Number(payment.amount).toFixed(2)}`}</strong> via <strong>{payment.method}</strong>.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => confirmPayment(payment.id)}>Confirm</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        )}
+                    </AlertDialog>
+                )}
+               
 
                 <Button
                   size="icon"
@@ -719,7 +737,7 @@ function POSPageContent() {
             id: result.orderId,
             items: cart,
             total: total,
-            date: new Date().toISOString(),
+            date: new Date(),
             paymentMethod: 'Split',
             partialPayments: payments.filter(p => p.confirmed).map(({id, confirmed, ...rest}) => rest),
             customerName: customerName || 'Walk-in',
@@ -774,7 +792,7 @@ function POSPageContent() {
             id: result.orderId,
             items: cart,
             total,
-            date: new Date().toISOString(),
+            date: new Date(),
             paymentMethod: method,
             customerName: customerName || 'Walk-in',
             status: 'Completed',
@@ -838,7 +856,7 @@ function POSPageContent() {
                         id: result.orderId,
                         items: cart,
                         total,
-                        date: new Date().toISOString(),
+                        date: new Date(),
                         paymentMethod: 'Paystack',
                         customerName: customerName || 'Walk-in',
                         status: 'Completed',
@@ -1321,10 +1339,7 @@ function POSPageContent() {
         {/* Receipt Dialog */}
         <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
             <DialogContent className="sm:max-w-xs print:max-w-full print:border-none print:shadow-none">
-                <DialogHeader>
-                   <DialogTitle className="sr-only">Sale Receipt</DialogTitle>
-                </DialogHeader>
-                {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} />}
+                {lastCompletedOrder && <Receipt order={lastCompletedOrder} storeAddress={storeAddress} ref={receiptRef} />}
                 <DialogFooter className="flex-row justify-end gap-2 print:hidden">
                     <Button variant="outline" onClick={() => handlePrint(receiptRef.current)}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                     <DialogClose asChild>
@@ -1348,4 +1363,3 @@ function POSPageWithSuspense() {
 export default function POSPageWithTypes() {
   return <POSPageWithSuspense />;
 }
-
