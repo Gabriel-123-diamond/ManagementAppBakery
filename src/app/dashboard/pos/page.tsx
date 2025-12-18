@@ -251,7 +251,7 @@ function SplitPaymentDialog({
   onOpenChange: (open: boolean) => void
   total: number
   onFinalize: (payments: PartialPayment[]) => void
-  onHold: (cart: CartItem[], payments: PartialPayment[]) => void
+  onHold: (partialPayments: PartialPayment[]) => void
   user: User | null;
 }) {
   const [payments, setPayments] = useState<PartialPayment[]>([]);
@@ -437,7 +437,7 @@ function SplitPaymentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Split Payment</DialogTitle>
           <DialogDescription>
@@ -548,7 +548,7 @@ function SplitPaymentDialog({
           </div>
         </div>
         <DialogFooter className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" onClick={() => onHold([], payments)} disabled={allConfirmed}>
+            <Button variant="secondary" onClick={() => onHold(payments)} disabled={allConfirmed}>
                 <Hand className="mr-2 h-4 w-4" /> Hold Order
             </Button>
              <Button
@@ -737,7 +737,7 @@ function POSPageContent() {
             id: result.orderId,
             items: cart,
             total: total,
-            date: new Date(),
+            date: new Date().toISOString(),
             paymentMethod: 'Split',
             partialPayments: payments.filter(p => p.confirmed).map(({id, confirmed, ...rest}) => rest),
             customerName: customerName || 'Walk-in',
@@ -792,7 +792,7 @@ function POSPageContent() {
             id: result.orderId,
             items: cart,
             total,
-            date: new Date(),
+            date: new Date().toISOString(),
             paymentMethod: method,
             customerName: customerName || 'Walk-in',
             status: 'Completed',
@@ -856,7 +856,7 @@ function POSPageContent() {
                         id: result.orderId,
                         items: cart,
                         total,
-                        date: new Date(),
+                        date: new Date().toISOString(),
                         paymentMethod: 'Paystack',
                         customerName: customerName || 'Walk-in',
                         status: 'Completed',
@@ -1325,14 +1325,7 @@ function POSPageContent() {
             onOpenChange={setIsSplitPaymentOpen}
             total={total}
             onFinalize={handleFinalizeSplitOrder}
-            onHold={(cart, payments) => {
-                const heldCart = [...cart];
-                (heldCart as any).partialPayments = payments;
-                 setHeldOrders(prev => [...prev, [heldCart]]);
-                clearCartAndStorage();
-                setIsSplitPaymentOpen(false);
-                toast({ title: "Order Held", description: "The current cart and its partial payments have been saved." });
-            }}
+            onHold={(payments) => holdOrder(payments)}
             user={user}
         />
 
@@ -1363,3 +1356,5 @@ function POSPageWithSuspense() {
 export default function POSPageWithTypes() {
   return <POSPageWithSuspense />;
 }
+
+    
