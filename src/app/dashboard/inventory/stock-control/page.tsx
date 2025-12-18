@@ -623,6 +623,41 @@ function ReturnStockDialog({ user, onReturn, personalStock, staffList, returnTyp
     )
 }
 
+function ViewTransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: Transfer | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!transfer) return null;
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Transfer Details</DialogTitle>
+                     <DialogDescription>
+                        From {transfer.from_staff_name} to {transfer.to_staff_name} on {format(new Date(transfer.date), 'PPp')}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4 max-h-96 overflow-y-auto">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {transfer.items.map(item => (
+                                <TableRow key={item.productId}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {transfer.notes && (
+                        <div className="space-y-1">
+                            <h4 className="font-semibold text-sm">Notes</h4>
+                            <p className="text-sm p-2 bg-muted rounded-md">{transfer.notes}</p>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 export default function StockControlPage() {
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
@@ -653,6 +688,7 @@ export default function StockControlPage() {
   const [isLoadingBatches, setIsLoadingBatches] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [viewingTransfer, setViewingTransfer] = useState<Transfer | null>(null);
 
 
   const [visiblePendingRows, setVisiblePendingRows] = useState<number | 'all'>(10);
@@ -868,7 +904,7 @@ export default function StockControlPage() {
   }, [allPendingTransfers, visibleAllPendingRows]);
   
   const paginatedLogs = useMemo(() => {
-    let filtered = initiatedTransfers;
+    let filtered = initiatedTransfers.filter(t => t.from_staff_id === user?.staff_id);
     if (date?.from) {
         const from = startOfDay(date.from);
         const to = date.to ? endOfDay(date.to) : endOfDay(date.from);
@@ -878,7 +914,7 @@ export default function StockControlPage() {
         })
     }
     return visibleLogRows === 'all' ? filtered : filtered.slice(0, visibleLogRows);
-  }, [initiatedTransfers, visibleLogRows, date]);
+  }, [initiatedTransfers, visibleLogRows, date, user]);
   
   const getAvailableProductsForRow = (rowIndex: number) => {
     const selectedIdsInOtherRows = new Set(
@@ -1525,7 +1561,7 @@ export default function StockControlPage() {
               </Card>
           </TabsContent>
       </Tabs>
-
+      <ViewTransferDetailsDialog transfer={viewingTransfer} isOpen={!!viewingTransfer} onOpenChange={() => setViewingTransfer(null)} />
       <Card>
         <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1545,12 +1581,13 @@ export default function StockControlPage() {
                         <TableHead>To</TableHead>
                         <TableHead>Items</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
                          <TableRow>
-                            <TableCell colSpan={5} className="h-24 text-center">
+                            <TableCell colSpan={6} className="h-24 text-center">
                                 <Loader2 className="h-8 w-8 animate-spin"/>
                             </TableCell>
                         </TableRow>
@@ -1562,11 +1599,16 @@ export default function StockControlPage() {
                                 <TableCell>{transfer.to_staff_name}</TableCell>
                                 <TableCell>{transfer.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
                                 <TableCell><Badge variant={transfer.status === 'pending' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' ? 'default' : 'destructive'}>{transfer.status}</Badge></TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" onClick={() => setViewingTransfer(transfer)}>
+                                        <Eye className="h-4 w-4"/>
+                                    </Button>
+                                </TableCell>
                             </TableRow>
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={5} className="h-24 text-center">No stock movements recorded for this period.</TableCell>
+                            <TableCell colSpan={6} className="h-24 text-center">No stock movements recorded for this period.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>

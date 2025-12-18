@@ -392,24 +392,57 @@ function ProductionLogDetailsDialog({ log, isOpen, onOpenChange, user }: { log: 
                     <h4 className="font-semibold text-base">Production Batch Details</h4>
                     <p><strong>Product:</strong> {batchDetails.productName} (x{batchDetails.quantityToProduce})</p>
                     <p><strong>Requested by:</strong> {batchDetails.requestedByName}</p>
-                    <Table>
-                        <TableHeader><TableRow>
-                            <TableHead>Ingredient</TableHead>
-                            <TableHead className="text-right">Available Before Prod</TableHead>
-                            <TableHead className="text-right">Used</TableHead>
-                            <TableHead className="text-right">Available After Prod</TableHead>
-                        </TableRow></TableHeader>
-                        <TableBody>
-                            {batchDetails.ingredients.map(ing => (
-                                <TableRow key={ing.ingredientId}>
-                                    <TableCell>{ing.ingredientName}</TableCell>
-                                    <TableCell className="text-right">{((ing.openingStock || 0)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {ing.unit}</TableCell>
-                                    <TableCell className="text-right text-red-500">- {ing.quantity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {ing.unit}</TableCell>
-                                    <TableCell className="text-right text-green-600 font-medium">{((ing.closingStock || 0)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {ing.unit}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                     
+                    {batchDetails.ingredients?.length > 0 && (
+                        <>
+                            <h5 className="font-medium mt-4">Ingredients Used</h5>
+                            <Table>
+                                <TableHeader><TableRow>
+                                    <TableHead>Ingredient</TableHead>
+                                    <TableHead className="text-right">Available Before Prod</TableHead>
+                                    <TableHead className="text-right">Used</TableHead>
+                                    <TableHead className="text-right">Available After Prod</TableHead>
+                                </TableRow></TableHeader>
+                                <TableBody>
+                                    {batchDetails.ingredients.map(ing => (
+                                        <TableRow key={ing.ingredientId}>
+                                            <TableCell>{ing.ingredientName}</TableCell>
+                                            <TableCell className="text-right">{((ing.openingStock || 0)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {ing.unit}</TableCell>
+                                            <TableCell className="text-right text-red-500">- {ing.quantity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {ing.unit}</TableCell>
+                                            <TableCell className="text-right text-green-600 font-medium">{((ing.closingStock || 0)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {ing.unit}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </>
+                    )}
+                    
+                    {batchDetails.producedItems && batchDetails.producedItems.length > 0 && (
+                        <>
+                             <h5 className="font-medium mt-4">Successfully Produced</h5>
+                             <Table>
+                                 <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                                 <TableBody>
+                                     {batchDetails.producedItems.map((item, index) => (
+                                         <TableRow key={`prod-${index}`}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                                     ))}
+                                 </TableBody>
+                             </Table>
+                        </>
+                    )}
+                     {batchDetails.wastedItems && batchDetails.wastedItems.length > 0 && (
+                        <>
+                             <h5 className="font-medium mt-4">Wasted Items</h5>
+                             <Table>
+                                 <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                                 <TableBody>
+                                     {batchDetails.wastedItems.map((item, index) => (
+                                         <TableRow key={`waste-${index}`}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                                     ))}
+                                 </TableBody>
+                             </Table>
+                        </>
+                    )}
                 </>
             )}
         </div>

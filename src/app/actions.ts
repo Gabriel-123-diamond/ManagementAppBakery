@@ -2051,7 +2051,9 @@ export type ProductionBatch = {
         closingStock?: number;
     }[];
     successfullyProduced?: number;
+    producedItems?: { productId: string; productName: string; quantity: number; }[];
     wasted?: number;
+    wastedItems?: { productId: string; productName: string; quantity: number; }[];
 };
 
 
@@ -2270,7 +2272,9 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
             transaction.update(batchRef, {
                 status: 'completed',
                 successfullyProduced: totalProduced,
+                producedItems: data.producedItems,
                 wasted: totalWasted,
+                wastedItems: data.wastedItems,
                 completedAt: serverTimestamp(),
             });
 
