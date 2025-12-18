@@ -119,10 +119,10 @@ const Receipt = React.forwardRef<HTMLDivElement, { order: CompletedOrder, storeA
                 <p><strong>Customer:</strong> {order.customerName || 'Walk-in'}</p>
             </div>
             <Separator className="my-2"/>
-            {order.paymentMethod === 'Split' && order.partialPayments && (
+            {order.paymentMethod === 'Split' && order.partialPayments && order.partialPayments.length > 0 && (
                 <>
                 <div className="text-xs">
-                    <h4 className="font-semibold mb-1">Payment Breakdown:</h4>
+                    <h4 className="font-semibold mb-1">Payment Details:</h4>
                     {order.partialPayments.map((p, i) => (
                         <div key={i} className="flex justify-between">
                             <span>{p.method}:</span>
@@ -190,7 +190,9 @@ const handlePrint = (node: HTMLElement | null) => {
                             window.print();
                             // Use a timeout to ensure the print dialog has time to open before we close the window
                             setTimeout(function() {
-                                window.close();
+                                if (!window.closed) {
+                                   window.close();
+                                }
                             }, 500);
                         };
                     </script>

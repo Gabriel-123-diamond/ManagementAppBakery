@@ -2902,9 +2902,11 @@ export async function initializePaystackTransaction(data: any): Promise<{ succes
             cart: data.items,
             isPosSale: data.isPosSale || false,
             isDebtPayment: data.isDebtPayment || false,
-            isPartialPayment: data.isPartialPayment || false,
             runId: data.runId || null,
             customerId: data.customerId || null,
+            // New fields for split payment
+            isPartialPayment: data.isPartialPayment || false,
+            posHoldId: data.posHoldId || null,
         };
 
         const response = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -3274,4 +3276,3 @@ export async function returnUnusedIngredients(
         return { success: false, error: (error as Error).message };
     }
 }
-
