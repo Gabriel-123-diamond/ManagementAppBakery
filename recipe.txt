@@ -1,0 +1,35 @@
+# Recipe Ingredient Lists
+
+## General Bread Production
+
+- Flour: 50000 g
+- Sugar: 4500 g
+- Salt: 450 g
+- Yeast: 500 g
+- Preservative: 150 g
+- Tin Milk: 6 pcs
+- Butter: 5000 g
+- Butterscotch Flavor: 100 g
+- Zeast Flavor: 60 g
+- Lux Essence: 100 g
+- Eggs: 12 pcs
+- Water: 20000 ml
+- Vegetable Oil: 300 ml
+- Bread Improver: 250 g
+
+---
+
+## Special Butterscotch Loaf
+
+- Flour: 50000 g
+- Sugar: 4000 g
+- Salt: 450 g
+- Yeast: 500 g
+- Preservative: 150 g
+- Tin Milk: 4 pcs
+- Butter: 6000 g
+- Butterscotch Flavor: 150 g
+- Conflaco Butter Scotch: 50 g
+- Eggs: 10 pcs
+- Water: 18000 ml
+- Bread Improver: 250 g

@@ -2105,6 +2105,7 @@ async function createProductionLog(action: string, details: string, user: { staf
 }
 
 type StartProductionData = {
+  recipe: any; // Full recipe object
   recipeId: string;
   recipeName: string;
   productName: string;
@@ -2115,12 +2116,13 @@ type StartProductionData = {
 
 export async function startProductionBatch(data: StartProductionData, user: { staff_id: string, name: string, role: string }): Promise<{success: boolean, error?: string}> {
     try {
-        const recipeDoc = await getDoc(doc(db, "recipes", data.recipeId));
-        if (!recipeDoc.exists()) {
-            return { success: false, error: "Recipe not found." };
+        // The recipe object is passed directly, so no need to fetch from DB if it exists
+        const recipeData = data.recipe;
+        if (!recipeData) {
+            return { success: false, error: "Recipe data not provided." };
         }
 
-        const baseIngredients = recipeDoc.data().ingredients;
+        const baseIngredients = recipeData.ingredients;
         const finalIngredients = baseIngredients.map((ing: any) => ({
             ...ing,
             quantity: data.batchSize === 'half' ? ing.quantity / 2 : ing.quantity
@@ -2128,7 +2130,12 @@ export async function startProductionBatch(data: StartProductionData, user: { st
 
         const newBatchRef = doc(collection(db, "production_batches"));
         await setDoc(newBatchRef, {
-            ...data,
+            recipeId: data.recipeId,
+            recipeName: data.recipeName,
+            productName: data.productName,
+            productId: data.productId,
+            quantityToProduce: data.quantityToProduce,
+            batchSize: data.batchSize,
             id: newBatchRef.id,
             status: 'pending_approval',
             createdAt: serverTimestamp(),
@@ -2596,7 +2603,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
 type PosSaleData = {
     items: { productId: string; quantity: number; price: number, name: string, costPrice: number }[];
     customerName: string;
-    paymentMethod: 'Cash' | 'POS' | 'Split';
+    paymentMethod: 'Cash' | 'POS' | 'Split' | 'Paystack';
     partialPayments?: PartialPayment[];
     staffId: string;
     staffName: string;
