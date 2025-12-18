@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -21,7 +20,7 @@ import {
   TableFooter
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle, Loader2, ChevronsUp, Calendar as CalendarIcon, ArrowDown, ArrowUp, Eye, FileUp } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronsUp, Calendar as CalendarIcon, ArrowDown, ArrowUp, Eye, FileUp, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -382,6 +381,8 @@ export default function IngredientsPage() {
     const [selectedLog, setSelectedLog] = useState<IngredientStockLog | null>(null);
     const [selectedProductionBatch, setSelectedProductionBatch] = useState<ProductionBatch | null>(null);
     const [selectedSupplyLog, setSelectedSupplyLog] = useState<SupplyLog | null>(null);
+
+    const [searchTerm, setSearchTerm] = useState("");
     
     useEffect(() => {
         const storedUser = localStorage.getItem('loggedInUser');
@@ -472,11 +473,13 @@ export default function IngredientsPage() {
       };
 
     const ingredientsWithTotal = useMemo(() => {
-        return ingredients.map(ing => ({
+        return ingredients
+            .filter(ing => ing.name.toLowerCase().includes(searchTerm.toLowerCase()))
+            .map(ing => ({
             ...ing,
             totalCost: (ing.stock || 0) * (ing.costPerUnit || 0),
         }))
-    }, [ingredients]);
+    }, [ingredients, searchTerm]);
     
     const grandTotalCost = useMemo(() => {
         return ingredientsWithTotal.reduce((acc, ing) => acc + ing.totalCost, 0);
@@ -542,10 +545,23 @@ export default function IngredientsPage() {
                 <TabsContent value="current-stock">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Manage Ingredients</CardTitle>
-                            <CardDescription>
-                                A list of all ingredients for your bakery's recipes.
-                            </CardDescription>
+                            <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
+                                <div>
+                                    <CardTitle>Manage Ingredients</CardTitle>
+                                    <CardDescription>
+                                        A list of all ingredients for your bakery's recipes.
+                                    </CardDescription>
+                                </div>
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        placeholder="Filter ingredients..." 
+                                        className="pl-8"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <Table>

@@ -589,7 +589,8 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
     
     const customSelectStyles = {
         control: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--input))', borderColor: 'hsl(var(--border))' }),
-        menu: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--popover))', zIndex: 9999 }),
+        menu: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--popover))', zIndex: 9999, maxHeight: '200px' }),
+        menuList: (styles: any) => ({ ...styles, maxHeight: '200px', overflowY: 'auto' }),
         option: (styles: any, { isFocused }: any) => ({ ...styles, backgroundColor: isFocused ? 'hsl(var(--accent))' : undefined }),
         multiValue: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--muted))' }),
     };
