@@ -1999,6 +1999,10 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     transaction.update(productRef, { stock: increment(item.quantity) });
                 }
                 transaction.update(transferRef, { status: 'completed', time_received: serverTimestamp(), time_completed: serverTimestamp() });
+                if (transfer.originalRunId) {
+                    const batchRef = doc(db, 'production_batches', transfer.originalRunId);
+                    transaction.update(batchRef, { status: 'completed' });
+                }
             
             } else { 
                 // Acknowledge a standard transfer TO staff
@@ -2270,8 +2274,9 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
             const totalProduced = data.producedItems.reduce((sum, item) => sum + item.quantity, 0);
             const totalWasted = data.wastedItems.reduce((sum, item) => sum + item.quantity, 0);
 
+            // Don't mark as completed here, wait for storekeeper approval of transfer
             transaction.update(batchRef, {
-                status: 'completed',
+                // status: 'completed', // This is now handled by acknowledge transfer
                 successfullyProduced: totalProduced,
                 producedItems: data.producedItems,
                 wasted: totalWasted,
@@ -2290,7 +2295,8 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
                     date: serverTimestamp(),
                     status: 'pending',
                     is_sales_run: false,
-                    notes: `Return from production batch ${data.batchId}`
+                    notes: `Return from production batch ${data.batchId}`,
+                    originalRunId: data.batchId, // Link transfer to batch
                 });
             }
 
@@ -2316,7 +2322,7 @@ export async function completeProductionBatch(data: CompleteBatchData, user: { s
             }
         });
         
-        await createProductionLog('Batch Completed', `Completed batch of ${data.batchId} with ${data.producedItems.reduce((s,i) => s+i.quantity,0)} produced items.`, user);
+        await createProductionLog('Batch Completed', `Completed batch of ${data.batchId} with ${data.producedItems.reduce((s,i) => s+i.quantity,0)} produced items. Awaiting storekeeper approval.`, user);
 
         return { success: true };
     } catch (error) {
@@ -3292,3 +3298,6 @@ export async function returnUnusedIngredients(
 }
 
 
+
+
+    

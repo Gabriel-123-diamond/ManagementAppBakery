@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -19,6 +20,7 @@ import {
     seedDeveloperData,
     seedSpecialScenario,
     seedRecipesOnly,
+    consolidateDuplicateProducts,
     runSpecialProductCleanup,
 } from "@/app/seed/actions";
 import { getAllSalesRuns, resetSalesRun, type SalesRun, getStaffList, getProductsForStaff, removeStockFromStaff } from "@/app/actions";
@@ -506,3 +508,6 @@ export default function DatabaseToolsPage() {
     </div>
   );
 }
+
+
+    

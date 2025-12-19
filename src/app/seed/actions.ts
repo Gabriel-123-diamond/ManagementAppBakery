@@ -1,4 +1,5 @@
 
+
 "use server";
 
 import { db } from "@/lib/firebase";
@@ -638,7 +639,7 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
             };
             return { ...p, stock: stockMap[p.id] || 0 };
         });
-        await batchCommit(specialProducts, "products");
+         await batchCommit(specialProducts, "products");
         
         // 4. Seed Main Inventory (Ingredients)
         const specialIngredients = ingredientsData.map(i => {
@@ -702,3 +703,6 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
         return { success: false, error: (e as Error).message };
     }
 }
+
+
+    
