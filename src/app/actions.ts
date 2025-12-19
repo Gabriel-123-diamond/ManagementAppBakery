@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -2155,7 +2154,7 @@ export async function startProductionBatch(data: StartProductionData, user: { st
             requestedById: user.staff_id,
             requestedByName: user.name,
         });
-        await createProductionLog('Batch Requested', `Requested a batch of ${data.recipeName}`, user);
+        await createProductionLog('Batch Requested', `Requested a batch of ${data.productName}`, user);
         return { success: true };
     } catch (error) {
         console.error("Error starting production batch:", error);
@@ -3301,8 +3300,6 @@ export async function returnUnusedIngredients(
         return { success: false, error: (error as Error).message };
     }
 }
-
-
-
+    
 
     
