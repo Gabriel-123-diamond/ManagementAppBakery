@@ -494,17 +494,16 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
     let totalProducedThisWeek = 0;
     completedBatchesSnapshot.forEach(doc => {
         const batch = doc.data();
+        const batchCompletedAt = (batch.completedAt as Timestamp)?.toDate();
+        if (batchCompletedAt) {
+            const dayOfWeek = format(batchCompletedAt, 'E');
+            const dayIndex = weeklyProductionData.findIndex(d => d.day === dayOfWeek);
+            if (dayIndex !== -1) {
+                weeklyProductionData[dayIndex].quantity += batch.successfullyProduced || 0;
+            }
+        }
         totalProducedThisWeek += batch.successfullyProduced || 0;
     });
-
-    // Fetch weekly production for the chart (remains static for now)
-    if (weeklyProductionData.length > 0) weeklyProductionData[0].quantity = 120; // Mon
-    if (weeklyProductionData.length > 1) weeklyProductionData[1].quantity = 150; // Tue
-    if (weeklyProductionData.length > 2) weeklyProductionData[2].quantity = 130; // Wed
-    if (weeklyProductionData.length > 3) weeklyProductionData[3].quantity = 180; // Thu
-    if (weeklyProductionData.length > 4) weeklyProductionData[4].quantity = 200; // Fri
-    if (weeklyProductionData.length > 5) weeklyProductionData[5].quantity = 90;  // Sat
-    if (weeklyProductionData.length > 6) weeklyProductionData[6].quantity = 50;  // Sun
 
     return {
         activeBatches: activeBatchesCount,
