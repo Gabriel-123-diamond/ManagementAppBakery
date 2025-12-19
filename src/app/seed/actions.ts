@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { db } from "@/lib/firebase";
@@ -30,7 +29,7 @@ const productsData = [
     { id: "prod_bread_2", name: "Short Loaf", price: 1300, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'short bread', costPrice: 800, lowStockThreshold: 50, minPrice: 1200, maxPrice: 1400 },
     { id: "prod_bread_3", name: "Jumbo Loaf", price: 1800, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'jumbo bread', costPrice: 1200, lowStockThreshold: 25, minPrice: 1700, maxPrice: 1900 },
     { id: "prod_bread_4", name: "Burger Loaf", price: 1800, stock: 0, category: 'Bread', unit: 'pack', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'burger bun', costPrice: 1100, lowStockThreshold: 50, minPrice: 1700, maxPrice: 1900 },
-    { id: "prod_bread_5", name: "Round bread", price: 300, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'round bread', costPrice: 180, lowStockThreshold: 100, minPrice: 250, maxPrice: 350 },
+    { id: "prod_bread_5", name: "Round Loaf", price: 300, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'round bread', costPrice: 180, lowStockThreshold: 100, minPrice: 250, maxPrice: 350 },
     { id: "prod_bread_6", name: "Breakfast loaf", price: 1000, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'breakfast bread', costPrice: 650, lowStockThreshold: 40, minPrice: 900, maxPrice: 1100 },
     { id: "prod_bread_7", name: "Mini Bite", price: 800, stock: 0, category: 'Bread', unit: 'pack', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'small bread', costPrice: 500, lowStockThreshold: 60, minPrice: 700, maxPrice: 900 },
     { id: "prod_bread_8", name: "Sandwich Bread", price: 1400, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sandwich bread', costPrice: 900, lowStockThreshold: 40, minPrice: 1300, maxPrice: 1500 },
@@ -678,7 +677,7 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
         if (mrPatrick) {
              const showroomStock = [
                 { productId: "prod_bread_2", productName: "Short Loaf", stock: 5 },
-                { productId: "prod_bread_5", productName: "Round bread", stock: 16 },
+                { productId: "prod_bread_5", productName: "Round Loaf", stock: 16 },
                 { productId: "prod_bread_3", productName: "Jumbo Loaf", stock: 5 },
                 { productId: "prod_bread_1", productName: "Family Loaf", stock: 2 },
                 { productId: "prod_bread_8", productName: "Sandwich Bread", stock: 13 },
