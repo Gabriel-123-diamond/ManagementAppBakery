@@ -136,9 +136,9 @@ function PaginationControls({
             <Button variant={visibleRows === 50 ? "default" : "outline"} size="sm" onClick={() => setVisibleRows(50)}>50</Button>
             <Button variant={visibleRows === 'all' ? "default" : "outline"} size="sm" onClick={() => setVisibleRows('all')}>All ({totalRows})</Button>
              <div className="flex items-center gap-1">
-                <Input 
-                    type="number" 
-                    className="h-8 w-16" 
+                <Input
+                    type="number"
+                    className="h-8 w-16"
                     placeholder="Custom"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -186,7 +186,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
-    
+
     const ingredientsWithStock = useMemo(() => {
         return batch.ingredients.map(reqIng => {
             const stockIng = allIngredients.find(sIng => sIng.id === reqIng.ingredientId);
@@ -197,7 +197,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
     }, [batch.ingredients, allIngredients]);
 
     const canApprove = ingredientsWithStock.every(ing => ing.hasEnough);
-    
+
     const handleApprove = async () => {
         setIsLoading(true);
         const result = await approveIngredientRequest(batch.id, batch.ingredients, user);
@@ -405,14 +405,14 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
         }
         setIsSubmitting(false);
     };
-    
+
     const getAvailableProductsForRow = (rowIndex: number) => {
         const selectedIdsInOtherRows = new Set(
             items.filter((_, i) => i !== rowIndex).map(item => item.productId)
         );
         return products.filter(p => !selectedIdsInOtherRows.has(p.productId));
     };
-    
+
     return (
         <Card className="flex-1">
             <CardHeader>
@@ -524,7 +524,7 @@ export default function StockControlPage() {
   const [items, setItems] = useState<Partial<TransferItem>[]>([
     { productId: "", quantity: 1 },
   ]);
-  
+
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -537,7 +537,7 @@ export default function StockControlPage() {
   const [completedTransfers, setCompletedTransfers] = useState<Transfer[]>([]);
   const [myWasteLogs, setMyWasteLogs] = useState<WasteLog[]>([]);
   const [personalStock, setPersonalStock] = useState<{ productId: string, productName: string, stock: number }[]>([]);
-  
+
   const [date, setDate] = useState<DateRange | undefined>();
   const [allPendingDate, setAllPendingDate] = useState<DateRange | undefined>();
   const [prodTransferDate, setProdTransferDate] = useState<DateRange | undefined>();
@@ -556,7 +556,7 @@ export default function StockControlPage() {
   const [visibleProdTransferRows, setVisibleProdTransferRows] = useState<number | 'all'>(10);
   const [visibleBatchApprovalRows, setVisibleBatchApprovalRows] = useState<number | 'all'>(10);
   const [visibleAllPendingRows, setVisibleAllPendingRows] = useState<number | 'all'>(10);
-  
+
   const fetchPageData = useCallback(async () => {
     const userStr = localStorage.getItem('loggedInUser');
     if (!userStr) {
@@ -566,22 +566,22 @@ export default function StockControlPage() {
     }
     const currentUser = JSON.parse(userStr);
     setUser(currentUser);
-    
+
     try {
         const staffQuery = query(collection(db, "staff"), where("role", "!=", "Developer"));
         const staffSnapshot = await getDocs(staffQuery);
         setStaff(staffSnapshot.docs.map(doc => ({ staff_id: doc.id, name: doc.data().name, role: doc.data().role } as StaffMember)));
-        
+
         const productsSnapshot = await getDocs(collection(db, "products"));
         setProducts(productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
 
-        
+
         const isSalesStaff = ['Delivery Staff', 'Showroom Staff'].includes(currentUser.role);
         if (isSalesStaff) {
             const stockData = await getProductsForStaff(currentUser.staff_id);
             setPersonalStock(stockData.map(d => ({productId: d.productId, productName: d.name, stock: d.stock})));
         }
-        
+
         const [pendingData, completedData, wasteData, prodTransfers, ingredientsSnapshot, initiatedTransfersSnapshot, returnedStockSnapshot, allBatches] = await Promise.all([
             getPendingTransfersForStaff(currentUser.staff_id),
             getCompletedTransfersForStaff(currentUser.staff_id),
@@ -702,7 +702,7 @@ export default function StockControlPage() {
 
     setIsSubmitting(true);
     const staffMember = staff.find(s => s.staff_id === transferTo);
-    
+
     const transferData = {
         to_staff_id: transferTo,
         to_staff_name: staffMember?.name || 'Unknown',
@@ -727,7 +727,7 @@ export default function StockControlPage() {
 
     setIsSubmitting(false);
   };
-  
+
   const handleAcknowledge = async (id: string, type: 'accept' | 'decline') => {
     setIsSubmitting(true);
     const result = await handleAcknowledgeTransfer(id, type);
@@ -765,7 +765,7 @@ export default function StockControlPage() {
   const paginatedAllPending = useMemo(() => {
     return visibleAllPendingRows === 'all' ? allPendingTransfers : allPendingTransfers.slice(0, visibleAllPendingRows);
   }, [allPendingTransfers, visibleAllPendingRows]);
-  
+
   const paginatedInitiatedLogs = useMemo(() => {
     let filtered = initiatedTransfers.filter(t => t.from_staff_id === user?.staff_id && !t.notes?.includes('Return from production batch'));
     if (date?.from) {
@@ -794,18 +794,18 @@ export default function StockControlPage() {
     if (batchApprovalDate?.from) {
         const from = startOfDay(batchApprovalDate.from);
         const to = batchApprovalDate.to ? endOfDay(batchApprovalDate.to) : endOfDay(batchApprovalDate.from);
-        filtered = filtered.filter(b => new Date(b.approvedAt!) >= from && new Date(b.approvedAt!) <= to);
+        filtered = filtered.filter(b => b.approvedAt && new Date(b.approvedAt) >= from && new Date(b.approvedAt) <= to);
     }
     return visibleBatchApprovalRows === 'all' ? filtered : filtered.slice(0, visibleBatchApprovalRows);
   }, [allProductionBatches, batchApprovalDate, visibleBatchApprovalRows]);
-  
+
   const getAvailableProductsForRow = (rowIndex: number) => {
     const selectedIdsInOtherRows = new Set(
         items.filter((_, i) => i !== rowIndex).map(item => item.productId)
     );
     return products.filter(p => !selectedIdsInOtherRows.has(p.id));
   };
-  
+
   const productCategories = useMemo(() => ['All', ...new Set(products.map(p => p.category))], [products]);
 
 
@@ -814,15 +814,15 @@ export default function StockControlPage() {
   const isStorekeeper = userRole === 'Storekeeper';
   const isBaker = userRole === 'Baker' || userRole === 'Chief Baker';
   const canInitiateTransfer = isManagerOrDev || isStorekeeper;
-  
+
   if (!user || isLoading) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
-  
+
   if (!canInitiateTransfer) {
      return (
         <div className="space-y-6">
-             <ProductEditDialog 
+             <ProductEditDialog
                 product={editingProduct}
                 onOpenChange={() => setEditingProduct(null)}
                 onProductUpdate={fetchPageData}
@@ -1049,12 +1049,12 @@ export default function StockControlPage() {
       <Tabs defaultValue={isStorekeeper ? 'initiate-transfer' : 'pending-transfers'}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
-                {isStorekeeper && 
+                {isStorekeeper &&
                     <TabsTrigger value="initiate-transfer">
                         <Send className="mr-2 h-4 w-4" /> Initiate Transfer
                     </TabsTrigger>
                 }
-                 {isStorekeeper && 
+                 {isStorekeeper &&
                     <TabsTrigger value="batch-approvals" className="relative">
                         <Wrench className="mr-2 h-4 w-4" /> Batch Approvals
                         {pendingBatches.length > 0 && (
@@ -1064,7 +1064,7 @@ export default function StockControlPage() {
                         )}
                     </TabsTrigger>
                 }
-                 {isStorekeeper && 
+                 {isStorekeeper &&
                     <TabsTrigger value="returned-stock" className="relative">
                         <Undo2 className="mr-2 h-4 w-4" /> Returned Stock
                         {returnedStock.length > 0 && (
@@ -1074,7 +1074,7 @@ export default function StockControlPage() {
                         )}
                     </TabsTrigger>
                 }
-                 {isStorekeeper && 
+                 {isStorekeeper &&
                     <TabsTrigger value="production-transfers" className="relative">
                         <ArrowRightLeft className="mr-2 h-4 w-4" /> Production Transfers
                         {productionTransfers.length > 0 && (
@@ -1524,4 +1524,3 @@ export default function StockControlPage() {
     </div>
   );
 }
-
