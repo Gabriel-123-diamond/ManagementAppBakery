@@ -1,4 +1,5 @@
 
+
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -474,13 +475,13 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
     }));
     
     // Assign static values
-    weeklyProductionData[0].quantity = 120; // Mon
-    weeklyProductionData[1].quantity = 150; // Tue
-    weeklyProductionData[2].quantity = 130; // Wed
-    weeklyProductionData[3].quantity = 180; // Thu
-    weeklyProductionData[4].quantity = 200; // Fri
-    weeklyProductionData[5].quantity = 90;  // Sat
-    weeklyProductionData[6].quantity = 50;  // Sun
+    if (weeklyProductionData[0]) weeklyProductionData[0].quantity = 120; // Mon
+    if (weeklyProductionData[1]) weeklyProductionData[1].quantity = 150; // Tue
+    if (weeklyProductionData[2]) weeklyProductionData[2].quantity = 130; // Wed
+    if (weeklyProductionData[3]) weeklyProductionData[3].quantity = 180; // Thu
+    if (weeklyProductionData[4]) weeklyProductionData[4].quantity = 200; // Fri
+    if (weeklyProductionData[5]) weeklyProductionData[5].quantity = 90;  // Sat
+    if (weeklyProductionData[6]) weeklyProductionData[6].quantity = 50;  // Sun
 
     return {
         activeBatches: 3,
@@ -1640,7 +1641,7 @@ type ReportWasteData = {
     notes?: string;
 };
 
-export async function handleReportWaste(data: ReportWasteData, user: { staff_id: string, name: string, role: string }): Promise<{success: boolean, error?: string}> {
+export async function handleReportWaste(data: ReportWasteData, user: { staff_id: string; name: string, role: string }): Promise<{success: boolean, error?: string}> {
     if (!data.items || data.items.length === 0 || !data.reason) {
         return { success: false, error: "Please provide items and a reason for the waste." };
     }
