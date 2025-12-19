@@ -39,7 +39,7 @@ import { collection, onSnapshot, query, orderBy, where, doc, addDoc, getDoc, upd
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { startProductionBatch, approveIngredientRequest, declineProductionBatch, completeProductionBatch, ProductionBatch, ProductionLog, getRecipes, getProducts, getIngredients, getStaffByRole, getProductionBatch, getProductionLogs, handleSaveRecipe, handleDeleteRecipe, cancelProductionBatch, getProductionBatches } from "@/app/actions";
+import { startProductionBatch, approveIngredientRequest, declineProductionBatch, completeProductionBatch, ProductionBatch, ProductionLog, getRecipes, getProducts, getIngredients, getStaffByRole, getProductionBatch, getProductionLogs, handleSaveRecipe, handleDeleteRecipe, cancelProductionBatch, getProductionBatches, Transfer } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay, endOfDay } from "date-fns";
@@ -690,6 +690,7 @@ export default function RecipesPage() {
     
     const [productionBatches, setProductionBatches] = useState<{ pending: ProductionBatch[], in_production: ProductionBatch[], completed: ProductionBatch[], other: ProductionBatch[] }>({ pending: [], in_production: [], completed: [], other: [] });
     const [productionLogs, setProductionLogs] = useState<ProductionLog[]>([]);
+    const [pendingTransfers, setPendingTransfers] = useState<Transfer[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
     const [viewingLog, setViewingLog] = useState<ProductionLog | null>(null);
@@ -767,9 +768,15 @@ export default function RecipesPage() {
             setProductionLogs(logs);
         });
 
+        const qTransfers = query(collection(db, 'transfers'), where('status', '==', 'pending'));
+        const unsubTransfers = onSnapshot(qTransfers, (snapshot) => {
+            setPendingTransfers(snapshot.docs.map(d => d.data() as Transfer));
+        });
+
         return () => {
             unsubBatches();
             unsubLogs();
+            unsubTransfers();
         }
     }, []);
     
@@ -934,7 +941,7 @@ export default function RecipesPage() {
                 <TabsList>
                     {!isBaker && <TabsTrigger value="recipes">Recipes</TabsTrigger>}
                     <TabsTrigger value="production" className="relative">
-                        Production Batches
+                        Production Queue
                         {productionBatches.pending.length > 0 && (
                             <Badge variant="destructive" className="ml-2">{productionBatches.pending.length}</Badge>
                         )}
@@ -1048,30 +1055,33 @@ export default function RecipesPage() {
                                     <Table>
                                         <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                         <TableBody>
-                                            {section.paginatedList.length > 0 ? section.paginatedList.map(batch => (
-                                                <TableRow key={batch.id}>
-                                                    <TableCell>{format(new Date(batch.createdAt), 'Pp')}</TableCell>
-                                                    <TableCell>{batch.productName}</TableCell>
-                                                    <TableCell>{batch.requestedByName}</TableCell>
-                                                    <TableCell><Badge variant={getStatusVariant(batch.status)}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                    <TableCell>
-                                                        {batch.status === 'pending_approval' && canApproveBatches && (
-                                                            <ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchStaticData} />
-                                                        )}
-                                                         {batch.status === 'pending_approval' && isBaker && (
-                                                            <Button size="sm" variant="destructive" onClick={() => handleCancelRequest(batch.id)} disabled={isSubmitting}><Ban className="mr-2 h-4 w-4"/> Cancel</Button>
-                                                        )}
-                                                        {batch.status === 'in_production' && canCompleteBatches && (
-                                                            <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} isSubmitting={isSubmitting}/>
-                                                        )}
-                                                        {(batch.status === 'completed' || batch.status === 'declined' || batch.status === 'cancelled') && (
-                                                            <Button size="sm" variant="outline" onClick={() => handleViewDetailsAction(batch)}>
-                                                                <Eye className="mr-2 h-4 w-4" /> View Details
-                                                            </Button>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            )) : <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">No batches in this stage.</TableCell></TableRow>}
+                                            {section.paginatedList.length > 0 ? section.paginatedList.map(batch => {
+                                                const hasPendingTransfer = pendingTransfers.some(t => t.originalRunId === batch.id);
+                                                return (
+                                                    <TableRow key={batch.id}>
+                                                        <TableCell>{format(new Date(batch.createdAt), 'Pp')}</TableCell>
+                                                        <TableCell>{batch.productName}</TableCell>
+                                                        <TableCell>{batch.requestedByName}</TableCell>
+                                                        <TableCell><Badge variant={getStatusVariant(batch.status)}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                        <TableCell>
+                                                            {batch.status === 'pending_approval' && canApproveBatches && (
+                                                                <ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchStaticData} />
+                                                            )}
+                                                            {batch.status === 'pending_approval' && isBaker && (
+                                                                <Button size="sm" variant="destructive" onClick={() => handleCancelRequest(batch.id)} disabled={isSubmitting}><Ban className="mr-2 h-4 w-4"/> Cancel</Button>
+                                                            )}
+                                                            {batch.status === 'in_production' && canCompleteBatches && (
+                                                                <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} isSubmitting={isSubmitting || hasPendingTransfer}/>
+                                                            )}
+                                                            {(batch.status === 'completed' || batch.status === 'declined' || batch.status === 'cancelled') && (
+                                                                <Button size="sm" variant="outline" onClick={() => handleViewDetailsAction(batch)}>
+                                                                    <Eye className="mr-2 h-4 w-4" /> View Details
+                                                                </Button>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            ) : <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">No batches in this stage.</TableCell></TableRow>}
                                         </TableBody>
                                     </Table>
                                     </div>
@@ -1144,5 +1154,3 @@ export default function RecipesPage() {
         </div>
     );
 }
-
-    
