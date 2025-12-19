@@ -124,7 +124,7 @@ function IngredientDialog({
             setName("");
             setUnit("");
             setStock(0);
-            setCostPerUnit("");
+            setCostPerUnit(0);
             setExpiryDate(undefined);
             setLowStockThreshold(10);
         }
@@ -166,7 +166,7 @@ function IngredientDialog({
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="costPerUnit" className="text-right">Cost/Unit (₦)</Label>
-                        <Input id="costPerUnit" type="number" value={costPerUnit} onChange={(e) => setCostPerUnit(parseFloat(e.target.value))} className="col-span-3" disabled={isStorekeeper} />
+                        <Input id="costPerUnit" type="number" value={costPerUnit} onChange={(e) => setCostPerUnit(e.target.value === '' ? '' : parseFloat(e.target.value))} className="col-span-3" disabled={isStorekeeper} />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="stock" className="text-right">Stock</Label>
