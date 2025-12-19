@@ -780,7 +780,7 @@ export default function StockControlPage() {
   }, [initiatedTransfers, visibleLogRows, date, user]);
 
   const paginatedProductionTransferLogs = useMemo(() => {
-    let filtered = initiatedTransfers.filter(t => t.notes?.includes('Return from production batch') && t.from_staff_id === user?.staff_id);
+    let filtered = initiatedTransfers.filter(t => t.notes?.includes('Return from production batch') && t.to_staff_id === user?.staff_id);
     if (prodTransferDate?.from) {
         const from = startOfDay(prodTransferDate.from);
         const to = prodTransferDate.to ? endOfDay(prodTransferDate.to) : endOfDay(prodTransferDate.from);
