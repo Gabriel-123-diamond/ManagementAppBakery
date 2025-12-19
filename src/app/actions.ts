@@ -474,17 +474,26 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
         quantity: 0,
     }));
     
-    // Assign static values
-    if (weeklyProductionData[0]) weeklyProductionData[0].quantity = 120; // Mon
-    if (weeklyProductionData[1]) weeklyProductionData[1].quantity = 150; // Tue
-    if (weeklyProductionData[2]) weeklyProductionData[2].quantity = 130; // Wed
-    if (weeklyProductionData[3]) weeklyProductionData[3].quantity = 180; // Thu
-    if (weeklyProductionData[4]) weeklyProductionData[4].quantity = 200; // Fri
-    if (weeklyProductionData[5]) weeklyProductionData[5].quantity = 90;  // Sat
-    if (weeklyProductionData[6]) weeklyProductionData[6].quantity = 50;  // Sun
+    // Fetch active batches for the specific baker
+    const activeBatchesQuery = query(
+        collection(db, 'production_batches'),
+        where('requestedById', '==', bakerId),
+        where('status', 'in', ['pending_approval', 'in_production'])
+    );
+    const activeBatchesSnapshot = await getDocs(activeBatchesQuery);
+    const activeBatchesCount = activeBatchesSnapshot.size;
+
+    // Fetch weekly production for the chart (remains static for now)
+    if (weeklyProductionData.length > 0) weeklyProductionData[0].quantity = 120; // Mon
+    if (weeklyProductionData.length > 1) weeklyProductionData[1].quantity = 150; // Tue
+    if (weeklyProductionData.length > 2) weeklyProductionData[2].quantity = 130; // Wed
+    if (weeklyProductionData.length > 3) weeklyProductionData[3].quantity = 180; // Thu
+    if (weeklyProductionData.length > 4) weeklyProductionData[4].quantity = 200; // Fri
+    if (weeklyProductionData.length > 5) weeklyProductionData[5].quantity = 90;  // Sat
+    if (weeklyProductionData.length > 6) weeklyProductionData[6].quantity = 50;  // Sun
 
     return {
-        activeBatches: 3,
+        activeBatches: activeBatchesCount,
         producedThisWeek: 920,
         weeklyProduction: weeklyProductionData,
     };
@@ -3268,3 +3277,4 @@ export async function returnUnusedIngredients(
     
 
     
+
