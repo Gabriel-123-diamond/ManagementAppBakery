@@ -466,17 +466,22 @@ export type BakerDashboardStats = {
     weeklyProduction: { day: string, quantity: number }[];
 };
 
-export async function getBakerDashboardStats(): Promise<BakerDashboardStats> {
+export async function getBakerDashboardStats(bakerId: string): Promise<BakerDashboardStats> {
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
     try {
-        const activeBatchesQuery = query(collection(db, 'production_batches'), where('status', 'in', ['in_production', 'pending_approval']));
+        const activeBatchesQuery = query(
+            collection(db, 'production_batches'),
+            where('requestedById', '==', bakerId),
+            where('status', 'in', ['in_production', 'pending_approval'])
+        );
         const activeBatchesSnapshot = await getDocs(activeBatchesQuery);
 
         const recentCompletedQuery = query(
             collection(db, 'production_batches'),
+            where('requestedById', '==', bakerId),
             where('status', '==', 'completed'),
             where('completedAt', '>=', Timestamp.fromDate(weekStart)),
             where('completedAt', '<=', Timestamp.fromDate(weekEnd))

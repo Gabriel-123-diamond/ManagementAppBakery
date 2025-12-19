@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -437,17 +438,20 @@ const chartConfig = {
 function BakerDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState<BakerDashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [dateRange, setDateRange] = useState<'weekly' | 'monthly'>('weekly');
 
   useEffect(() => {
+    if (!user || !user.staff_id) {
+        setIsLoading(false);
+        return;
+    }
     const fetchBakerData = async () => {
         setIsLoading(true);
-        const data = await getBakerDashboardStats();
+        const data = await getBakerDashboardStats(user.staff_id);
         setStats(data);
         setIsLoading(false);
     }
     fetchBakerData();
-  }, [])
+  }, [user]);
   
   if (isLoading || !stats) {
     return (
@@ -810,7 +814,7 @@ export default function Dashboard() {
 
   const managementRoles = ['Manager', 'Supervisor', 'Accountant', 'Developer'];
 
-  if (user.role === 'Baker') {
+  if (user.role === 'Baker' || user.role === 'Chief Baker') {
       return <BakerDashboard user={user} />;
   }
   

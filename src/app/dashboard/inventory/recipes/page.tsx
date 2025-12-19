@@ -169,7 +169,7 @@ function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | u
 }
 
 
-function CompleteBatchDialog({ batch, user, onBatchCompleted, products }: { batch: ProductionBatch, user: User, onBatchCompleted: () => void, products: Product[] }) {
+function CompleteBatchDialog({ batch, user, onBatchCompleted, products, isSubmitting: isExternallySubmitting }: { batch: ProductionBatch, user: User, onBatchCompleted: () => void, products: Product[], isSubmitting: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -258,12 +258,12 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products }: { batc
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild><Button size="sm">Complete Batch</Button></DialogTrigger>
+            <DialogTrigger asChild><Button size="sm" disabled={isExternallySubmitting}>Complete Batch</Button></DialogTrigger>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Complete Production Batch</DialogTitle>
                     <DialogDescription>
-                        Enter the final counts for batch <strong>{batch.id.substring(0,6)}...</strong>.
+                        Enter the final counts for batch <strong>{batch.id.substring(0,6)}...</strong> for product <strong>{batch.productName}</strong>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
@@ -375,7 +375,7 @@ function ProductionLogDetailsDialog({ log, isOpen, onOpenChange, user }: { log: 
                  <>
                     <Separator className="my-4"/>
                     <h4 className="font-semibold text-base">Production Batch Details</h4>
-                    <p><strong>Product:</strong> {batchDetails.productName} (x{batchDetails.quantityToProduce})</p>
+                    <p><strong>Product:</strong> {batchDetails.productName}</p>
                     <p><strong>Requested by:</strong> {batchDetails.requestedByName}</p>
                      
                     {batchDetails.ingredients?.length > 0 && (
@@ -489,8 +489,9 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
                     <DialogTitle>Approve Production Batch?</DialogTitle>
                     <DialogDescription>
                         Batch ID: {batch.id.substring(0,6)}...<br/>
-                        Request for <strong>{batch.recipeName}</strong>. This will deduct ingredients from inventory.
+                        Request for <strong>{batch.productName}</strong>. This will deduct ingredients from inventory.
                     </DialogDescription>
+                    <DialogClose />
                 </DialogHeader>
                 <div className="max-h-60 overflow-y-auto">
                     <Table>
@@ -1051,7 +1052,7 @@ export default function RecipesPage() {
                                             {section.paginatedList.length > 0 ? section.paginatedList.map(batch => (
                                                 <TableRow key={batch.id}>
                                                     <TableCell>{format(new Date(batch.createdAt), 'Pp')}</TableCell>
-                                                    <TableCell>{batch.recipeName}</TableCell>
+                                                    <TableCell>{batch.productName}</TableCell>
                                                     <TableCell>{batch.requestedByName}</TableCell>
                                                     <TableCell><Badge variant={getStatusVariant(batch.status)}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                     <TableCell>
@@ -1062,7 +1063,7 @@ export default function RecipesPage() {
                                                             <Button size="sm" variant="destructive" onClick={() => handleCancelRequest(batch.id)} disabled={isSubmitting}><Ban className="mr-2 h-4 w-4"/> Cancel</Button>
                                                         )}
                                                         {batch.status === 'in_production' && canCompleteBatches && (
-                                                            <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} />
+                                                            <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} isSubmitting={isSubmitting}/>
                                                         )}
                                                         {(batch.status === 'completed' || batch.status === 'declined' || batch.status === 'cancelled') && (
                                                             <Button size="sm" variant="outline" onClick={() => handleViewDetailsAction(batch)}>
