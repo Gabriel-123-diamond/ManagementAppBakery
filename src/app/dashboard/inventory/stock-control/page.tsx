@@ -1458,8 +1458,9 @@ export default function StockControlPage() {
                     )}
                 </TableBody>
             </Table>
-        </CardFooter>
+        </CardContent>
       </Card>
     </div>
   );
 }
+
