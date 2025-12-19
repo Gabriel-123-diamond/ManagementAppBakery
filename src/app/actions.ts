@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -483,6 +482,21 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
     const activeBatchesSnapshot = await getDocs(activeBatchesQuery);
     const activeBatchesCount = activeBatchesSnapshot.size;
 
+    // Fetch weekly production for the chart
+    const completedBatchesQuery = query(
+        collection(db, 'production_batches'),
+        where('requestedById', '==', bakerId),
+        where('status', '==', 'completed'),
+        where('completedAt', '>=', Timestamp.fromDate(weekStart))
+    );
+    const completedBatchesSnapshot = await getDocs(completedBatchesQuery);
+    
+    let totalProducedThisWeek = 0;
+    completedBatchesSnapshot.forEach(doc => {
+        const batch = doc.data();
+        totalProducedThisWeek += batch.successfullyProduced || 0;
+    });
+
     // Fetch weekly production for the chart (remains static for now)
     if (weeklyProductionData.length > 0) weeklyProductionData[0].quantity = 120; // Mon
     if (weeklyProductionData.length > 1) weeklyProductionData[1].quantity = 150; // Tue
@@ -494,7 +508,7 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
 
     return {
         activeBatches: activeBatchesCount,
-        producedThisWeek: 920,
+        producedThisWeek: totalProducedThisWeek,
         weeklyProduction: weeklyProductionData,
     };
 }
@@ -3278,3 +3292,4 @@ export async function returnUnusedIngredients(
 
     
 
+    
