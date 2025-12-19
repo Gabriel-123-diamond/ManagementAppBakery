@@ -176,23 +176,18 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products }: { batc
     const [storekeepers, setStorekeepers] = useState<any[]>([]);
     const [producedItems, setProducedItems] = useState<BatchItem[]>([{ productId: '', productName: '', quantity: '' }]);
     const [wastedItems, setWastedItems] = useState<BatchItem[]>([]);
-    const [recipeDetails, setRecipeDetails] = useState<Recipe | null>(null);
     
     useEffect(() => {
         if (isOpen) {
             const fetchDetails = async () => {
                 const staff = await getStaffByRole('Storekeeper');
                 setStorekeepers(staff);
-                const recipeDoc = await getDoc(doc(db, "recipes", batch.recipeId));
-                if (recipeDoc.exists()) {
-                    setRecipeDetails({ id: recipeDoc.id, ...recipeDoc.data() } as Recipe);
-                }
             };
             fetchDetails();
             setProducedItems([{ productId: '', productName: '', quantity: '' }]);
             setWastedItems([]);
         }
-    }, [isOpen, batch.recipeId]);
+    }, [isOpen]);
 
     const handleItemChange = (index: number, field: keyof BatchItem, value: string, type: 'produced' | 'wasted') => {
         const setItems = type === 'produced' ? setProducedItems : setWastedItems;
@@ -257,19 +252,8 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products }: { batc
         setIsLoading(false);
     }
     
-    const getAvailableProducts = (type: 'produced' | 'wasted', index: number) => {
-        const currentList = type === 'produced' ? producedItems : wastedItems;
-        const selectedIds = new Set(currentList.map(item => item.productId).filter(id => id)); // Get all selected IDs in the current list
-        
-        const currentItem = currentList[index];
-
-        const recipeProductIds = recipeDetails?.applicableProductIds || [];
-        const isGeneral = recipeDetails?.isGeneralRecipe || false;
-
-        return products.filter(p => 
-            (isGeneral || recipeProductIds.includes(p.id)) &&
-            (!selectedIds.has(p.id) || p.id === currentItem.productId) 
-        );
+    const getAvailableProducts = () => {
+        return products;
     };
 
     return (
@@ -292,7 +276,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products }: { batc
                                     <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val, 'produced')}>
                                         <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
                                         <SelectContent>
-                                            {getAvailableProducts('produced', index).map(p => (
+                                            {getAvailableProducts().map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -318,7 +302,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products }: { batc
                                      <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val, 'wasted')}>
                                         <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
                                         <SelectContent>
-                                            {getAvailableProducts('wasted', index).map(p => (
+                                            {getAvailableProducts().map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -727,13 +711,15 @@ export default function RecipesPage() {
 
     const fetchStaticData = useCallback(async () => {
         try {
-            const [productData, ingredientData] = await Promise.all([
+            const [productData, ingredientData, recipeData] = await Promise.all([
                 getProducts(),
                 getIngredients(),
+                getRecipes()
             ]);
 
             setProducts(productData);
             setIngredients(ingredientData);
+            setRecipes(recipeData);
 
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -747,15 +733,10 @@ export default function RecipesPage() {
             setUser(JSON.parse(storedUser));
         }
 
-        fetchStaticData();
-        
-        const unsubRecipes = onSnapshot(collection(db, "recipes"), (snapshot) => {
-            const dbRecipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
-            setRecipes(dbRecipes);
+        fetchStaticData().then(() => {
             if(isLoading) setIsLoading(false);
         });
-
-        return () => { unsubRecipes() };
+        
     }, [fetchStaticData, isLoading]);
     
     useEffect(() => {
@@ -900,7 +881,7 @@ export default function RecipesPage() {
     }
 
     const canApproveBatches = user.role === 'Manager' || user.role === 'Developer' || user.role === 'Storekeeper';
-    const canCompleteBatches = user.role === 'Baker' || user.role === 'Chief Baker';
+    const canCompleteBatches = user.role === 'Baker' || user.role === 'Chief Baker' || user.role === 'Developer';
     const isBaker = user.role === 'Baker' || user.role === 'Chief Baker';
     const canStartProduction = isBaker || user.role === 'Developer';
     const canEditRecipe = user.role === 'Manager' || user.role === 'Developer';
@@ -1163,4 +1144,3 @@ export default function RecipesPage() {
         </div>
     );
 }
-
