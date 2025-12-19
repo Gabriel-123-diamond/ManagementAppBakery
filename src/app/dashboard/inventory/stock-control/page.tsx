@@ -61,7 +61,7 @@ import { cn } from "@/lib/utils";
 import { collection, getDocs, query, where, orderBy, Timestamp, getDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getProductsForStaff, handleReturnStock, getReturnedStockTransfers, returnUnusedIngredients } from "@/app/actions";
+import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -479,150 +479,6 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
     );
 }
 
-function ReturnStockDialog({ user, onReturn, personalStock, staffList, returnType }: { user: User, onReturn: () => void, personalStock: { productId: string, productName: string, stock: number }[], staffList: StaffMember[], returnType: 'product' | 'ingredient' }) {
-    const { toast } = useToast();
-    const [isOpen, setIsOpen] = useState(false);
-    const [itemsToReturn, setItemsToReturn] = useState<Record<string, number | string>>({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [returnTo, setReturnTo] = useState('');
-
-    const title = returnType === 'product' ? 'Return Unsold Stock' : 'Return Unused Ingredients';
-    const description = returnType === 'product' ? 'Enter quantities for products you want to return.' : 'Return unused ingredients from a production run back to the main store.';
-
-    const returnableStaff = useMemo(() => {
-        if (user.role === 'Showroom Staff') {
-            return staffList.filter(s => s.role === 'Storekeeper' || s.role === 'Delivery Staff');
-        }
-        if (user.role === 'Baker' || user.role === 'Chief Baker') {
-            return staffList.filter(s => s.role === 'Storekeeper');
-        }
-        return [];
-    }, [staffList, user.role]);
-    
-    useEffect(() => {
-        if (isOpen) {
-            setItemsToReturn({});
-            setReturnTo('');
-        }
-    }, [isOpen]);
-
-    const handleQuantityChange = (productId: string, value: string, maxStock: number) => {
-        const numValue = Number(value);
-        if (isNaN(numValue) || numValue < 0) {
-            setItemsToReturn(prev => ({...prev, [productId]: ''}));
-            return;
-        }
-
-        if (numValue > maxStock) {
-            toast({ variant: 'destructive', title: 'Error', description: `Cannot return more than the available ${maxStock} units.`});
-            setItemsToReturn(prev => ({...prev, [productId]: maxStock}));
-        } else {
-            setItemsToReturn(prev => ({...prev, [productId]: numValue}));
-        }
-    };
-    
-    const handleSubmit = async () => {
-        const items = Object.entries(itemsToReturn)
-            .map(([id, quantity]) => {
-                const stockItem = personalStock.find(p => p.productId === id);
-                return {
-                    productId: id,
-                    productName: stockItem?.productName || 'Unknown',
-                    quantity: Number(quantity),
-                };
-            })
-            .filter(item => item.quantity > 0);
-
-        if (items.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a quantity for at least one item.' });
-            return;
-        }
-
-        setIsSubmitting(true);
-        
-        let result;
-        if(returnType === 'product') {
-            result = await handleReturnStock("showroom-return", items, user, returnTo);
-        } else {
-            // This is a simplified view, it should be a proper function
-            result = await returnUnusedIngredients(items.map(i => ({ingredientId: i.productId, quantity: i.quantity, ingredientName: i.productName})), user);
-        }
-        
-        if (result.success) {
-            toast({ title: 'Success', description: 'Stock return request submitted for approval.' });
-            onReturn();
-            setIsOpen(false);
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: result.error });
-        }
-        setIsSubmitting(false);
-    }
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button variant="secondary" className="w-full">
-                    <Undo2 className="mr-2 h-4 w-4" /> {title}
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-xl">
-                <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
-                    <DialogDescription>{description}</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 max-h-96 overflow-y-auto space-y-4">
-                    <div className="space-y-2">
-                        <Label>Return to</Label>
-                        <Select value={returnTo} onValueChange={setReturnTo}>
-                            <SelectTrigger><SelectValue placeholder="Select staff to return to..." /></SelectTrigger>
-                            <SelectContent>
-                                {returnableStaff.map(s => (
-                                    <SelectItem key={s.staff_id} value={s.staff_id}>{s.name} ({s.role})</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Product</TableHead>
-                                <TableHead className="text-center">Available</TableHead>
-                                <TableHead className="text-right">Quantity to Return</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {personalStock.map(item => (
-                                <TableRow key={item.productId}>
-                                    <TableCell>{item.productName}</TableCell>
-                                    <TableCell className="text-center">{item.stock}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Input
-                                            type="number"
-                                            className="w-24 h-8 text-right ml-auto"
-                                            placeholder="0"
-                                            value={itemsToReturn[item.productId] || ''}
-                                            onChange={(e) => handleQuantityChange(item.productId, e.target.value, item.stock)}
-                                            max={item.stock}
-                                            min={0}
-                                        />
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || !returnTo}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Submit Return Request
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
 function ViewTransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: Transfer | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
     if (!transfer) return null;
     return (
@@ -991,20 +847,9 @@ export default function StockControlPage() {
                                     </Table>
                                 </CardContent>
                             </Card>
-                             {isBaker && (
-                                <ReturnStockDialog user={user} onReturn={fetchPageData} personalStock={[]} staffList={staff} returnType="ingredient" />
-                            )}
                         </div>
                         <div className="lg:col-span-1 flex flex-col gap-6">
                             <ReportWasteTab products={personalStock} user={user} onWasteReported={fetchPageData} />
-                            {(userRole === 'Showroom Staff' || isBaker) && (
-                                <Card>
-                                    <CardHeader><CardTitle>Return Stock</CardTitle></CardHeader>
-                                    <CardContent>
-                                        <ReturnStockDialog user={user} onReturn={fetchPageData} personalStock={personalStock} staffList={staff} returnType="product" />
-                                    </CardContent>
-                                </Card>
-                            )}
                         </div>
                     </div>
                 </TabsContent>

@@ -1,8 +1,7 @@
 
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +16,13 @@ import {
     seedCommunicationData,
     seedFullData,
     clearMultipleCollections,
+    seedDeveloperData,
+    seedSpecialScenario,
+    seedRecipesOnly,
+    runSpecialProductCleanup,
 } from "@/app/seed/actions";
-import { Loader2, DatabaseZap, Trash2, ArrowLeft } from "lucide-react";
+import { getAllSalesRuns, resetSalesRun, type SalesRun, getStaffList, getProductsForStaff, removeStockFromStaff } from "@/app/actions";
+import { Loader2, DatabaseZap, Trash2, ArrowLeft, RefreshCw, MinusCircle, Wand2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +38,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import speakeasy from 'speakeasy';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 const collectionsToClear = [
@@ -55,19 +59,46 @@ export default function DatabaseToolsPage() {
   const { toast } = useToast();
   const [isVerified, setIsVerified] = useState(false);
   const [password, setPassword] = useState('');
-  const [mfaCode, setMfaCode] = useState('');
+  const [salesRuns, setSalesRuns] = useState<SalesRun[]>([]);
+  const [selectedRun, setSelectedRun] = useState('');
+  
+  // New state for stock removal tool
+  const [allStaff, setAllStaff] = useState<{ id: string, name: string, role: string }[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [staffProducts, setStaffProducts] = useState<{ productId: string, name: string, stock: number }[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [quantityToRemove, setQuantityToRemove] = useState<number | string>(1);
+
+
+  const fetchPageData = async () => {
+    const { active, completed } = await getAllSalesRuns();
+    setSalesRuns([...active, ...completed]);
+    const staff = await getStaffList();
+    setAllStaff(staff);
+  };
+
+  useEffect(() => {
+    if (isVerified) {
+        fetchPageData();
+    }
+  }, [isVerified]);
+  
+  useEffect(() => {
+    if (selectedStaffId) {
+        getProductsForStaff(selectedStaffId).then(setStaffProducts);
+        setSelectedProductId(''); // Reset product selection
+    } else {
+        setStaffProducts([]);
+    }
+  }, [selectedStaffId]);
+
 
   const handleVerification = () => {
-    // This is a placeholder for actual user verification
-    // In a real app, you would verify the user's password and MFA status
-    const isPasswordCorrect = password === 'password123';
-    const isMfaCorrect = mfaCode ? speakeasy.totp.verify({ secret: 'DB_TOOLS_SECRET', encoding: 'base32', token: mfaCode }) : true; // Simplified for prototype
-
-    if (isPasswordCorrect) {
+    if (password === 'password123') {
         setIsVerified(true);
         toast({ title: "Access Granted", description: "Database tools unlocked." });
     } else {
-        toast({ variant: "destructive", title: "Access Denied", description: "Incorrect password or MFA code." });
+        toast({ variant: "destructive", title: "Access Denied", description: "Incorrect password." });
     }
   };
 
@@ -91,6 +122,46 @@ export default function DatabaseToolsPage() {
       startTransition(false);
     });
   };
+
+  const handleResetRun = () => {
+    if (!selectedRun) return;
+    setCurrentlySeeding('reset_run');
+    startTransition(true);
+
+    resetSalesRun(selectedRun).then(result => {
+      if (result.success) {
+        toast({ title: "Success!", description: `Sales run ${selectedRun.substring(0,6)}... has been reset.`});
+        fetchPageData();
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.error || 'Could not reset the sales run.' });
+      }
+      setSelectedRun('');
+      setCurrentlySeeding(null);
+      startTransition(false);
+    })
+  }
+
+  const handleRemoveStock = async () => {
+    if (!selectedStaffId || !selectedProductId || Number(quantityToRemove) <= 0) {
+        toast({ variant: 'destructive', title: 'Invalid Selection', description: 'Please select a staff, product, and valid quantity.' });
+        return;
+    }
+    setCurrentlySeeding('remove_stock');
+    startTransition(true);
+    const result = await removeStockFromStaff(selectedStaffId, selectedProductId, Number(quantityToRemove));
+    if (result.success) {
+        toast({ title: "Success!", description: `Stock removed successfully.` });
+        // Refresh product list for the selected staff
+        const updatedProducts = await getProductsForStaff(selectedStaffId);
+        setStaffProducts(updatedProducts);
+        setSelectedProductId('');
+        setQuantityToRemove(1);
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.error });
+    }
+    setCurrentlySeeding(null);
+    startTransition(false);
+  }
   
   const handleClearMultiple = async () => {
     if (selectedCollections.length === 0) return;
@@ -126,7 +197,7 @@ export default function DatabaseToolsPage() {
         <Card className="w-full max-w-md">
             <CardHeader>
                 <CardTitle>Verification Required</CardTitle>
-                <CardDescription>Enter your credentials to access the database tools.</CardDescription>
+                <CardDescription>Enter the password to access the database tools.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -137,17 +208,6 @@ export default function DatabaseToolsPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleVerification()}
-                    />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="mfa-code">MFA Code (if enabled)</Label>
-                    <Input 
-                        id="mfa-code" 
-                        type="text"
-                        value={mfaCode}
-                        onChange={(e) => setMfaCode(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleVerification()}
-                        placeholder="123456"
                     />
                 </div>
             </CardContent>
@@ -171,6 +231,114 @@ export default function DatabaseToolsPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <div className="space-y-6">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Developer Actions</CardTitle>
+                        <CardDescription>Specialized actions for debugging and testing.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                         <div className="space-y-2 p-3 border rounded-md">
+                            <Label>Special Product Cleanup</Label>
+                             <p className="text-xs text-muted-foreground">Fixes the stock for Burger/Jumbo loafs for specific staff roles, and deletes the old product names.</p>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="secondary" className="w-full" disabled={isPending}>
+                                        <Wand2 className="mr-2 h-4 w-4"/>
+                                        Run Special Cleanup
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This will run a highly specific data migration for "Jumbo" and "Burger" products across staff inventories. It is designed for a particular scenario and is irreversible.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleSeedAction('Special Product Cleanup', runSpecialProductCleanup)}>Run Special Cleanup</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                        <div className="space-y-2 p-3 border rounded-md">
+                            <Label>Reset a Sales Run</Label>
+                            <p className="text-xs text-muted-foreground">Select a run to reset it to its initial "active" state, clearing all associated orders and payments.</p>
+                            <div className="flex gap-2">
+                                <Select value={selectedRun} onValueChange={setSelectedRun}>
+                                    <SelectTrigger><SelectValue placeholder="Select a sales run..."/></SelectTrigger>
+                                    <SelectContent>
+                                        {salesRuns.map(run => (
+                                            <SelectItem key={run.id} value={run.id}>{run.to_staff_name} - {run.id.substring(0,6)}... ({run.status})</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                 <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" disabled={!selectedRun || isPending}><RefreshCw className="h-4 w-4"/></Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Reset this Sales Run?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This will delete all orders and payments for this run and set its status to 'active'. This action is irreversible.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleResetRun}>Confirm Reset</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        </div>
+
+                         <div className="space-y-2 p-3 border rounded-md">
+                            <Label>Manual Stock Adjustment</Label>
+                            <p className="text-xs text-muted-foreground">Directly remove a specified quantity of a product from a staff member's personal inventory.</p>
+                            <div className="space-y-2">
+                                <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                                    <SelectTrigger><SelectValue placeholder="Select staff..."/></SelectTrigger>
+                                    <SelectContent>
+                                        {allStaff.filter(s => ['Delivery Staff', 'Showroom Staff', 'Storekeeper'].includes(s.role)).map(s => (
+                                            <SelectItem key={s.id} value={s.id}>{s.name} ({s.role})</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={selectedProductId} onValueChange={setSelectedProductId} disabled={!selectedStaffId || staffProducts.length === 0}>
+                                    <SelectTrigger><SelectValue placeholder="Select product..."/></SelectTrigger>
+                                    <SelectContent>
+                                        {staffProducts.map(p => (
+                                            <SelectItem key={p.productId} value={p.productId}>{p.name} (Stock: {p.stock})</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <div className="flex items-center gap-2">
+                                    <Input type="number" placeholder="Quantity" value={quantityToRemove} onChange={e => setQuantityToRemove(e.target.value)} min={1} />
+                                     <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive" disabled={!selectedProductId || isPending}><MinusCircle className="h-4 w-4"/></Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Remove Stock?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Are you sure you want to remove {quantityToRemove} unit(s) of {staffProducts.find(p => p.productId === selectedProductId)?.name} from {allStaff.find(s => s.id === selectedStaffId)?.name}'s inventory? This action cannot be undone.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleRemoveStock}>Confirm Removal</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                            </div>
+                        </div>
+
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Seed Data</CardTitle>
@@ -185,6 +353,33 @@ export default function DatabaseToolsPage() {
                         >
                             {currentlySeeding === "Full Database" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4"/>}
                             Seed Full Demo Data
+                        </Button>
+                         <Button 
+                            variant="outline"
+                            onClick={() => handleSeedAction("Developer Account", seedDeveloperData)}
+                            disabled={isPending}
+                            className="w-full"
+                        >
+                            {currentlySeeding === "Developer Account" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4"/>}
+                            Seed Developer Account Only
+                        </Button>
+                        <Button 
+                            variant="outline"
+                            onClick={() => handleSeedAction("Recipes Only", seedRecipesOnly)}
+                            disabled={isPending}
+                            className="w-full"
+                        >
+                            {currentlySeeding === "Recipes Only" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4"/>}
+                            Seed Recipes Only
+                        </Button>
+                         <Button 
+                            variant="destructive"
+                            onClick={() => handleSeedAction("Special Scenario", seedSpecialScenario)}
+                            disabled={isPending}
+                            className="w-full"
+                        >
+                            {currentlySeeding === "Special Scenario" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4"/>}
+                            Seed Special Scenario
                         </Button>
                         <Separator className="my-2" />
                          <div className="grid grid-cols-2 gap-2">
@@ -311,4 +506,3 @@ export default function DatabaseToolsPage() {
     </div>
   );
 }
-
