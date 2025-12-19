@@ -612,6 +612,14 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
         option: (styles: any, { isFocused }: any) => ({ ...styles, backgroundColor: isFocused ? 'hsl(var(--accent))' : undefined }),
         multiValue: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--muted))' }),
     };
+    
+    const getAvailableIngredientsForRow = (rowIndex: number) => {
+        const selectedIds = ingredients.map(ing => ing.ingredientId);
+        return allIngredients.filter(ing => 
+            !selectedIds.includes(ing.id) || ingredients[rowIndex].ingredientId === ing.id
+        );
+    };
+
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -652,19 +660,21 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
                     <div className="space-y-2">
                         <Label>Ingredients</Label>
                         <div className="space-y-2">
-                            {ingredients.map((ing, index) => (
+                            {ingredients.map((ing, index) => {
+                                const availableIngredients = getAvailableIngredientsForRow(index);
+                                return (
                                 <div key={index} className="flex items-center gap-2">
                                     <Select value={ing.ingredientId} onValueChange={val => handleIngredientChange(index, 'ingredientId', val)}>
                                         <SelectTrigger><SelectValue placeholder="Select Ingredient" /></SelectTrigger>
                                         <SelectContent>
-                                            {allIngredients.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                                            {availableIngredients.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                     <Input type="number" placeholder="Qty" value={ing.quantity} onChange={e => handleIngredientChange(index, 'quantity', e.target.value)} className="w-28" />
                                     <span className="w-12 text-sm text-muted-foreground">{ing.unit}</span>
                                     <Button variant="ghost" size="icon" onClick={() => handleRemoveIngredient(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                         <Button variant="outline" size="sm" onClick={handleAddIngredient}><PlusCircle className="mr-2 h-4 w-4"/>Add Ingredient</Button>
                     </div>
@@ -747,8 +757,8 @@ export default function RecipesPage() {
                 return {
                     id: docSnap.id, ...data,
                     createdAt: (data.createdAt as any)?.toDate().toISOString(),
-                    approvedAt: (data.approvedAt as any)?.toDate().toISOString(),
-                    completedAt: (data.completedAt as any)?.toDate().toISOString(),
+                    approvedAt: (data.approvedAt as any)?.toDate()?.toISOString(),
+                    completedAt: (data.completedAt as any)?.toDate()?.toISOString(),
                 } as ProductionBatch
             });
              setProductionBatches({
