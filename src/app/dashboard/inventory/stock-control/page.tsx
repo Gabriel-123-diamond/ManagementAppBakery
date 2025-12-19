@@ -61,7 +61,7 @@ import { cn } from "@/lib/utils";
 import { collection, getDocs, query, where, orderBy, Timestamp, getDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getReturnedStockTransfers } from "@/app/actions";
+import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getReturnedStockTransfers, getProductionBatches } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -531,6 +531,7 @@ export default function StockControlPage() {
   const [initiatedTransfers, setInitiatedTransfers] = useState<Transfer[]>([]);
   const [pendingTransfers, setPendingTransfers] = useState<Transfer[]>([]);
   const [productionTransfers, setProductionTransfers] = useState<Transfer[]>([]);
+  const [allProductionBatches, setAllProductionBatches] = useState<ProductionBatch[]>([]);
   const [returnedStock, setReturnedStock] = useState<Transfer[]>([]);
   const [pendingBatches, setPendingBatches] = useState<ProductionBatch[]>([]);
   const [completedTransfers, setCompletedTransfers] = useState<Transfer[]>([]);
@@ -539,7 +540,9 @@ export default function StockControlPage() {
   
   const [date, setDate] = useState<DateRange | undefined>();
   const [allPendingDate, setAllPendingDate] = useState<DateRange | undefined>();
-  
+  const [prodTransferDate, setProdTransferDate] = useState<DateRange | undefined>();
+  const [batchApprovalDate, setBatchApprovalDate] = useState<DateRange | undefined>();
+
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingBatches, setIsLoadingBatches] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -550,6 +553,8 @@ export default function StockControlPage() {
   const [visiblePendingRows, setVisiblePendingRows] = useState<number | 'all'>(10);
   const [visibleHistoryRows, setVisibleHistoryRows] = useState<number | 'all'>(10);
   const [visibleLogRows, setVisibleLogRows] = useState<number | 'all'>(10);
+  const [visibleProdTransferRows, setVisibleProdTransferRows] = useState<number | 'all'>(10);
+  const [visibleBatchApprovalRows, setVisibleBatchApprovalRows] = useState<number | 'all'>(10);
   const [visibleAllPendingRows, setVisibleAllPendingRows] = useState<number | 'all'>(10);
   
   const fetchPageData = useCallback(async () => {
@@ -577,7 +582,7 @@ export default function StockControlPage() {
             setPersonalStock(stockData.map(d => ({productId: d.productId, productName: d.name, stock: d.stock})));
         }
         
-        const [pendingData, completedData, wasteData, prodTransfers, ingredientsSnapshot, initiatedTransfersSnapshot, returnedStockSnapshot] = await Promise.all([
+        const [pendingData, completedData, wasteData, prodTransfers, ingredientsSnapshot, initiatedTransfersSnapshot, returnedStockSnapshot, allBatches] = await Promise.all([
             getPendingTransfersForStaff(currentUser.staff_id),
             getCompletedTransfersForStaff(currentUser.staff_id),
             getWasteLogsForStaff(currentUser.staff_id),
@@ -585,6 +590,7 @@ export default function StockControlPage() {
             getDocs(collection(db, "ingredients")),
             getDocs(query(collection(db, "transfers"), orderBy("date", "desc"))),
             getReturnedStockTransfers(),
+            getProductionBatches().then(b => [...b.pending, ...b.in_production, ...b.completed, ...b.other]),
         ]);
 
         setPendingTransfers(pendingData);
@@ -594,6 +600,7 @@ export default function StockControlPage() {
         setIngredients(ingredientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, unit: doc.data().unit, stock: doc.data().stock } as Ingredient)));
         setInitiatedTransfers(initiatedTransfersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), date: (doc.data().date as Timestamp).toDate().toISOString() } as Transfer)));
         setReturnedStock(returnedStockSnapshot);
+        setAllProductionBatches(allBatches);
 
     } catch (error) {
         console.error("Error fetching data:", error);
@@ -759,8 +766,8 @@ export default function StockControlPage() {
     return visibleAllPendingRows === 'all' ? allPendingTransfers : allPendingTransfers.slice(0, visibleAllPendingRows);
   }, [allPendingTransfers, visibleAllPendingRows]);
   
-  const paginatedLogs = useMemo(() => {
-    let filtered = initiatedTransfers.filter(t => t.from_staff_id === user?.staff_id);
+  const paginatedInitiatedLogs = useMemo(() => {
+    let filtered = initiatedTransfers.filter(t => t.from_staff_id === user?.staff_id && !t.notes?.includes('Return from production batch'));
     if (date?.from) {
         const from = startOfDay(date.from);
         const to = date.to ? endOfDay(date.to) : endOfDay(date.from);
@@ -771,6 +778,26 @@ export default function StockControlPage() {
     }
     return visibleLogRows === 'all' ? filtered : filtered.slice(0, visibleLogRows);
   }, [initiatedTransfers, visibleLogRows, date, user]);
+
+  const paginatedProductionTransferLogs = useMemo(() => {
+    let filtered = initiatedTransfers.filter(t => t.notes?.includes('Return from production batch') && t.from_staff_id === user?.staff_id);
+    if (prodTransferDate?.from) {
+        const from = startOfDay(prodTransferDate.from);
+        const to = prodTransferDate.to ? endOfDay(prodTransferDate.to) : endOfDay(prodTransferDate.from);
+        filtered = filtered.filter(t => new Date(t.date) >= from && new Date(t.date) <= to);
+    }
+    return visibleProdTransferRows === 'all' ? filtered : filtered.slice(0, visibleProdTransferRows);
+  }, [initiatedTransfers, user, prodTransferDate, visibleProdTransferRows]);
+
+  const paginatedBatchApprovalLogs = useMemo(() => {
+    let filtered = allProductionBatches.filter(b => b.status === 'completed' || b.status === 'declined');
+    if (batchApprovalDate?.from) {
+        const from = startOfDay(batchApprovalDate.from);
+        const to = batchApprovalDate.to ? endOfDay(batchApprovalDate.to) : endOfDay(batchApprovalDate.from);
+        filtered = filtered.filter(b => new Date(b.approvedAt!) >= from && new Date(b.approvedAt!) <= to);
+    }
+    return visibleBatchApprovalRows === 'all' ? filtered : filtered.slice(0, visibleBatchApprovalRows);
+  }, [allProductionBatches, batchApprovalDate, visibleBatchApprovalRows]);
   
   const getAvailableProductsForRow = (rowIndex: number) => {
     const selectedIdsInOtherRows = new Set(
@@ -1064,6 +1091,9 @@ export default function StockControlPage() {
                             {allPendingTransfers.length}
                         </Badge>
                     )}
+                </TabsTrigger>
+                <TabsTrigger value="logs">
+                    <History className="mr-2 h-4 w-4"/> Log
                 </TabsTrigger>
             </TabsList>
         </div>
@@ -1405,61 +1435,92 @@ export default function StockControlPage() {
                 </CardFooter>
               </Card>
           </TabsContent>
+          <TabsContent value="logs">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Stock Control Log</CardTitle>
+                    <CardDescription>A complete audit trail of transfers and batch approvals you've handled.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Tabs defaultValue="initiated">
+                        <TabsList>
+                            <TabsTrigger value="initiated">Initiated Transfers</TabsTrigger>
+                            <TabsTrigger value="prod-transfers">Production Transfers</TabsTrigger>
+                            <TabsTrigger value="batch-approvals">Batch Approvals</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="initiated" className="mt-4">
+                            <div className="flex justify-end mb-4">
+                                <DateRangeFilter date={date} setDate={setDate} />
+                            </div>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {paginatedInitiatedLogs.map(t => (
+                                        <TableRow key={t.id}>
+                                            <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
+                                            <TableCell>{t.from_staff_name}</TableCell>
+                                            <TableCell>{t.to_staff_name}</TableCell>
+                                            <TableCell>{t.items.reduce((s,i) => s + i.quantity, 0)}</TableCell>
+                                            <TableCell><Badge variant={t.status === 'pending' ? 'secondary' : t.status === 'completed' || t.status === 'active' ? 'default' : 'destructive'}>{t.status}</Badge></TableCell>
+                                            <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setViewingTransfer(t)}><Eye className="h-4 w-4"/></Button></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                            <CardFooter className="pt-4">
+                                <PaginationControls visibleRows={visibleLogRows} setVisibleRows={setVisibleLogRows} totalRows={paginatedInitiatedLogs.length} />
+                            </CardFooter>
+                        </TabsContent>
+                        <TabsContent value="prod-transfers" className="mt-4">
+                             <div className="flex justify-end mb-4">
+                                <DateRangeFilter date={prodTransferDate} setDate={setProdTransferDate} />
+                            </div>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {paginatedProductionTransferLogs.map(t => (
+                                         <TableRow key={t.id}>
+                                            <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
+                                            <TableCell>{t.from_staff_name}</TableCell>
+                                            <TableCell>{t.items.reduce((s,i) => s + i.quantity, 0)}</TableCell>
+                                            <TableCell><Badge variant={t.status === 'pending' ? 'secondary' : t.status === 'completed' ? 'default' : 'destructive'}>{t.status}</Badge></TableCell>
+                                            <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setViewingTransfer(t)}><Eye className="h-4 w-4"/></Button></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                             <CardFooter className="pt-4">
+                                <PaginationControls visibleRows={visibleProdTransferRows} setVisibleRows={setVisibleProdTransferRows} totalRows={paginatedProductionTransferLogs.length} />
+                            </CardFooter>
+                        </TabsContent>
+                        <TabsContent value="batch-approvals" className="mt-4">
+                             <div className="flex justify-end mb-4">
+                                <DateRangeFilter date={batchApprovalDate} setDate={setBatchApprovalDate} />
+                            </div>
+                           <Table>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Requester</TableHead><TableHead>Product</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {paginatedBatchApprovalLogs.map(b => (
+                                         <TableRow key={b.id}>
+                                            <TableCell>{b.approvedAt ? format(new Date(b.approvedAt), 'Pp') : 'N/A'}</TableCell>
+                                            <TableCell>{b.requestedByName}</TableCell>
+                                            <TableCell>{b.productName}</TableCell>
+                                            <TableCell><Badge variant={b.status === 'completed' ? 'default' : 'destructive'}>{b.status}</Badge></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                             <CardFooter className="pt-4">
+                                <PaginationControls visibleRows={visibleBatchApprovalRows} setVisibleRows={setVisibleBatchApprovalRows} totalRows={paginatedBatchApprovalLogs.length} />
+                            </CardFooter>
+                        </TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
+          </TabsContent>
       </Tabs>
+
       <ViewTransferDetailsDialog transfer={viewingTransfer} isOpen={!!viewingTransfer} onOpenChange={() => setViewingTransfer(null)} />
-      <Card>
-        <CardHeader>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <CardTitle>My Initiated Transfers Log</CardTitle>
-                    <CardDescription>A log of transfers you have initiated.</CardDescription>
-                </div>
-                <DateRangeFilter date={date} setDate={setDate} />
-            </div>
-        </CardHeader>
-        <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>From</TableHead>
-                        <TableHead>To</TableHead>
-                        <TableHead>Items</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoading ? (
-                         <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">
-                                <Loader2 className="h-8 w-8 animate-spin"/>
-                            </TableCell>
-                        </TableRow>
-                    ) : paginatedLogs.length > 0 ? (
-                        paginatedLogs.map((transfer) => (
-                             <TableRow key={transfer.id}>
-                                <TableCell>{transfer.date ? format(new Date(transfer.date), 'PPpp') : 'N/A'}</TableCell>
-                                <TableCell>{transfer.from_staff_name}</TableCell>
-                                <TableCell>{transfer.to_staff_name}</TableCell>
-                                <TableCell>{transfer.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
-                                <TableCell><Badge variant={transfer.status === 'pending' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' ? 'default' : 'destructive'}>{transfer.status}</Badge></TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={() => setViewingTransfer(transfer)}>
-                                        <Eye className="h-4 w-4"/>
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">No stock movements recorded for this period.</TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }
