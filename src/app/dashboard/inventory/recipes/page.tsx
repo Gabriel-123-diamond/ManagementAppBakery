@@ -168,7 +168,7 @@ function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | u
 }
 
 
-function CompleteBatchDialog({ batch, user, onBatchCompleted, products, isSubmitting: isExternallySubmitting }: { batch: ProductionBatch, user: User, onBatchCompleted: () => void, products: Product[], isSubmitting: boolean }) {
+function CompleteBatchDialog({ batch, user, onBatchCompleted, products, recipes, isSubmitting: isExternallySubmitting }: { batch: ProductionBatch, user: User, onBatchCompleted: () => void, products: Product[], recipes: Recipe[], isSubmitting: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -251,9 +251,18 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, isSubmit
         setIsLoading(false);
     }
     
-    const getAvailableProducts = () => {
-        return products;
-    };
+    const getAvailableProducts = useCallback(() => {
+        const recipe = recipes.find(r => r.id === batch.recipeId);
+        if (!recipe) return products;
+
+        if (recipe.isGeneralRecipe || !recipe.applicableProductIds || recipe.applicableProductIds.length === 0) {
+            return products;
+        }
+
+        return products.filter(p => recipe.applicableProductIds?.includes(p.id));
+    }, [recipes, batch.recipeId, products]);
+
+    const availableProducts = getAvailableProducts();
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -262,7 +271,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, isSubmit
                 <DialogHeader>
                     <DialogTitle>Complete Production Batch</DialogTitle>
                     <DialogDescription>
-                        Enter the final counts for batch <strong>{batch.id.substring(0,6)}...</strong> for product <strong>{batch.productName}</strong>
+                        Enter the final counts for batch <strong>{batch.id.substring(0,6)}...</strong> from recipe <strong>{batch.recipeName}</strong>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
@@ -275,7 +284,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, isSubmit
                                     <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val, 'produced')}>
                                         <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
                                         <SelectContent>
-                                            {getAvailableProducts().map(p => (
+                                            {availableProducts.map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -301,7 +310,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, isSubmit
                                      <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val, 'wasted')}>
                                         <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
                                         <SelectContent>
-                                            {getAvailableProducts().map(p => (
+                                            {availableProducts.map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -790,7 +799,7 @@ export default function RecipesPage() {
         }
     }, []);
     
-    const handleStartProduction = async (recipe: Recipe) => {
+    const handleStartProduction = async (recipe: Recipe, batchSize: 'full' | 'half') => {
         if (!user) {
             toast({ variant: 'destructive', title: 'Invalid input', description: 'User not found.' });
             return;
@@ -799,13 +808,13 @@ export default function RecipesPage() {
         setIsSubmitting(true);
 
         const batchData = {
+            recipe,
             recipeId: recipe.id,
             recipeName: recipe.name,
-            productId: 'multi-product',
             productName: recipe.name,
-            quantityToProduce: 1,
-            batchSize: 'full' as 'full' | 'half',
-            recipe: recipe
+            productId: 'recipe-batch', // Placeholder, not a real product
+            quantityToProduce: 1, // Represents one batch run
+            batchSize
         };
         
         const result = await startProductionBatch(batchData, user);
@@ -1028,7 +1037,7 @@ export default function RecipesPage() {
                                     <DialogContent>
                                         <DialogHeader>
                                             <DialogTitle>Start Production</DialogTitle>
-                                            <DialogDescription>Choose a recipe to start a production batch. This will send a request for approval.</DialogDescription>
+                                            <DialogDescription>Choose a recipe and batch size to start a production batch. This will send a request for approval.</DialogDescription>
                                         </DialogHeader>
                                         <div className="py-4 space-y-4">
                                             {recipes.map(recipe => (
@@ -1037,10 +1046,13 @@ export default function RecipesPage() {
                                                         <p className="font-semibold">{recipe.name}</p>
                                                         <p className="text-sm text-muted-foreground">{recipe.ingredients.length} ingredients</p>
                                                     </div>
-                                                    <Button onClick={() => handleStartProduction(recipe)} disabled={isSubmitting}>
-                                                        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin"/>}
-                                                        Start Batch
-                                                    </Button>
+                                                    <div className="flex gap-2">
+                                                        <Button size="sm" onClick={() => handleStartProduction(recipe, 'half')} disabled={isSubmitting}>Half</Button>
+                                                        <Button size="sm" onClick={() => handleStartProduction(recipe, 'full')} disabled={isSubmitting}>
+                                                            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin"/>}
+                                                            Full
+                                                        </Button>
+                                                    </div>
                                                 </Card>
                                             ))}
                                         </div>
@@ -1070,7 +1082,7 @@ export default function RecipesPage() {
                                                 return (
                                                     <TableRow key={batch.id}>
                                                         <TableCell>{format(new Date(batch.createdAt), 'Pp')}</TableCell>
-                                                        <TableCell>{batch.productName}</TableCell>
+                                                        <TableCell>{batch.recipeName}</TableCell>
                                                         <TableCell>{batch.requestedByName}</TableCell>
                                                         <TableCell><Badge variant={getStatusVariant(batch.status)}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                         <TableCell>
@@ -1081,7 +1093,7 @@ export default function RecipesPage() {
                                                                 <Button size="sm" variant="destructive" onClick={() => handleCancelRequest(batch.id)} disabled={isSubmitting}><Ban className="mr-2 h-4 w-4"/> Cancel</Button>
                                                             )}
                                                             {batch.status === 'in_production' && canCompleteBatches && (
-                                                                <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} isSubmitting={isSubmitting || hasPendingTransfer}/>
+                                                                <CompleteBatchDialog batch={batch} user={user} onBatchCompleted={fetchStaticData} products={products} recipes={recipes} isSubmitting={isSubmitting || hasPendingTransfer}/>
                                                             )}
                                                             {(batch.status === 'completed' || batch.status === 'declined' || batch.status === 'cancelled') && (
                                                                 <Button size="sm" variant="outline" onClick={() => handleViewDetailsAction(batch)}>
