@@ -264,6 +264,15 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, recipes,
 
     const availableProducts = getAvailableProducts();
 
+    const getDropdownOptions = (type: 'produced' | 'wasted', currentIndex: number) => {
+        const selectedIds = (type === 'produced' ? producedItems : wastedItems)
+            .filter((_, index) => index !== currentIndex)
+            .map(item => item.productId);
+        
+        return availableProducts.filter(p => !selectedIds.includes(p.id));
+    };
+
+
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild><Button size="sm" disabled={isExternallySubmitting}>Complete Batch</Button></DialogTrigger>
@@ -279,12 +288,14 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, recipes,
                     <div className="space-y-2">
                         <Label>Items Produced</Label>
                         <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                            {producedItems.map((item, index) => (
+                            {producedItems.map((item, index) => {
+                                const dropdownOptions = getDropdownOptions('produced', index);
+                                return (
                                 <div key={`prod-${index}`} className="grid grid-cols-[1fr_100px_auto] gap-2 items-center">
                                     <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val, 'produced')}>
                                         <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
                                         <SelectContent>
-                                            {availableProducts.map(p => (
+                                            {dropdownOptions.map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -294,7 +305,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, recipes,
                                         <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                          <Button variant="outline" size="sm" className="mt-2" onClick={() => handleAddItem('produced')}>
                             <PlusCircle className="mr-2 h-4 w-4" /> Add Product
@@ -305,12 +316,14 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, recipes,
                      <div className="space-y-2">
                         <Label>Wasted Products (Optional)</Label>
                          <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                            {wastedItems.map((item, index) => (
+                            {wastedItems.map((item, index) => {
+                                const dropdownOptions = getDropdownOptions('wasted', index);
+                                return (
                                 <div key={`waste-${index}`} className="grid grid-cols-[1fr_100px_auto] gap-2 items-center">
                                      <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val, 'wasted')}>
                                         <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
                                         <SelectContent>
-                                            {availableProducts.map(p => (
+                                            {dropdownOptions.map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -320,7 +333,7 @@ function CompleteBatchDialog({ batch, user, onBatchCompleted, products, recipes,
                                         <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                         <Button variant="outline" size="sm" className="mt-2" onClick={() => handleAddItem('wasted')}>
                             <PlusCircle className="mr-2 h-4 w-4" /> Add Wasted Product
@@ -383,7 +396,7 @@ function ProductionLogDetailsDialog({ log, isOpen, onOpenChange, user }: { log: 
                  <>
                     <Separator className="my-4"/>
                     <h4 className="font-semibold text-base">Production Batch Details</h4>
-                    <p><strong>Product:</strong> {batchDetails.productName}</p>
+                    <p><strong>Recipe:</strong> {batchDetails.recipeName}</p>
                     <p><strong>Requested by:</strong> {batchDetails.requestedByName}</p>
                      
                     {batchDetails.ingredients?.length > 0 && (
@@ -497,7 +510,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
                     <DialogTitle>Approve Production Batch?</DialogTitle>
                     <DialogDescription>
                         Batch ID: {batch.id.substring(0,6)}...<br/>
-                        Request for <strong>{batch.productName}</strong>. This will deduct ingredients from inventory.
+                        Request for <strong>{batch.recipeName}</strong>. This will deduct ingredients from inventory.
                     </DialogDescription>
                     <DialogClose />
                 </DialogHeader>
@@ -532,6 +545,43 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
             </DialogContent>
         </Dialog>
     );
+}
+
+function StartProductionDialog({ recipes, onStart, isSubmitting, user }: { recipes: Recipe[], onStart: (recipe: Recipe, batchSize: 'full' | 'half', productName: string, productId: string) => void, isSubmitting: boolean, user: User }) {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                 <Button>
+                    <CookingPot className="mr-2 h-4 w-4" /> Start Production Batch
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Start Production</DialogTitle>
+                    <DialogDescription>Choose a recipe and batch size to start a production batch. This will send a request for approval.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                    {recipes.map(recipe => (
+                        <Card key={recipe.id} className="p-4 flex justify-between items-center">
+                            <div>
+                                <p className="font-semibold">{recipe.name}</p>
+                                <p className="text-sm text-muted-foreground">{recipe.ingredients.length} ingredients</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" onClick={() => onStart(recipe, 'half', recipe.name, recipe.id)} disabled={isSubmitting}>Half</Button>
+                                <Button size="sm" onClick={() => onStart(recipe, 'full', recipe.name, recipe.id)} disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="h-4 w-4 animate-spin"/>}
+                                    Full
+                                </Button>
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
 }
 
 function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, children }: { onSave: (data: Omit<Recipe, 'id'>, id?: string) => void, allIngredients: Ingredient[], allProducts: Product[], recipe?: Recipe | null, user: User, children: React.ReactNode }) {
@@ -719,7 +769,6 @@ export default function RecipesPage() {
     const [logStaffFilter, setLogStaffFilter] = useState('all');
     const [logDate, setLogDate] = useState<DateRange | undefined>();
     const [visibleLogRows, setVisibleLogRows] = useState<number | 'all'>(10);
-    const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
 
     // New states for filtering production batches
     const [inProductionDate, setInProductionDate] = useState<DateRange | undefined>();
@@ -807,24 +856,21 @@ export default function RecipesPage() {
         
         setIsSubmitting(true);
 
-        const batchData = {
+        const result = await startProductionBatch({
             recipe,
             recipeId: recipe.id,
             recipeName: recipe.name,
-            productName: recipe.name,
-            productId: 'recipe-batch', // Placeholder, not a real product
-            quantityToProduce: 1, // Represents one batch run
             batchSize
-        };
+        }, user);
         
-        const result = await startProductionBatch(batchData, user);
         if (result.success) {
             toast({ title: 'Success', description: 'Production batch requested for approval.'});
-            setIsProductionDialogOpen(false);
+            // Dialog will be closed by the component itself on success.
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error});
         }
         setIsSubmitting(false);
+        return result.success;
     }
 
     const handleCancelRequest = async (batchId: string) => {
@@ -1028,36 +1074,12 @@ export default function RecipesPage() {
                                 <CardDescription>Manage and track all production batches.</CardDescription>
                             </div>
                              {canStartProduction && (
-                                <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button>
-                                            <CookingPot className="mr-2 h-4 w-4" /> Start Production Batch
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                        <DialogHeader>
-                                            <DialogTitle>Start Production</DialogTitle>
-                                            <DialogDescription>Choose a recipe and batch size to start a production batch. This will send a request for approval.</DialogDescription>
-                                        </DialogHeader>
-                                        <div className="py-4 space-y-4">
-                                            {recipes.map(recipe => (
-                                                <Card key={recipe.id} className="p-4 flex justify-between items-center">
-                                                    <div>
-                                                        <p className="font-semibold">{recipe.name}</p>
-                                                        <p className="text-sm text-muted-foreground">{recipe.ingredients.length} ingredients</p>
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <Button size="sm" onClick={() => handleStartProduction(recipe, 'half')} disabled={isSubmitting}>Half</Button>
-                                                        <Button size="sm" onClick={() => handleStartProduction(recipe, 'full')} disabled={isSubmitting}>
-                                                            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin"/>}
-                                                            Full
-                                                        </Button>
-                                                    </div>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </DialogContent>
-                                </Dialog>
+                                <StartProductionDialog 
+                                    recipes={recipes} 
+                                    onStart={handleStartProduction}
+                                    isSubmitting={isSubmitting}
+                                    user={user}
+                                />
                              )}
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -1176,3 +1198,4 @@ export default function RecipesPage() {
         </div>
     );
 }
+
