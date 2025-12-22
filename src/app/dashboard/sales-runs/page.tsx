@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
@@ -703,17 +702,6 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
 
         if (result.success && result.orderId) {
             toast({ title: 'Success', description: 'Sale has been submitted for approval.' });
-            onSaleMade({
-                id: result.orderId,
-                items: cart,
-                total,
-                date: new Date(),
-                paymentMethod: partialPayments ? 'Split' : paymentMethod,
-                partialPayments,
-                customerName: saleData.customerName,
-                status: 'Pending',
-                subtotal: total, tax: 0
-            });
             setIsOpen(false);
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
@@ -1609,8 +1597,7 @@ function SalesRunDetailsPageClientContent() {
     };
     
     const handleSaleMade = (newOrder: CompletedOrder) => {
-        // This can be used to show a receipt or confirmation
-        setViewingOrder(newOrder);
+        // Now this does nothing, as we don't want to show a receipt immediately.
     }
     
      const getRemainingItems = useCallback(() => {
