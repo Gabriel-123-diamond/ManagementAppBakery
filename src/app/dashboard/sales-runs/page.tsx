@@ -417,6 +417,189 @@ function SplitPaymentDialog({
   )
 }
 
+function LogExpenseDialog({ run, user }: { run: SalesRun, user: User | null }) {
+    const { toast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [category, setCategory] = useState('');
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState<number | ''>('');
+
+    const handleSubmit = async () => {
+        if (!user) return;
+        if (!category || !description || !amount || Number(amount) <= 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please fill all fields with valid values.' });
+            return;
+        }
+
+        setIsLoading(true);
+        const result = await logRunExpense({
+            runId: run.id,
+            driverId: user.staff_id,
+            driverName: user.name,
+            category,
+            description,
+            amount: Number(amount)
+        });
+
+        if (result.success) {
+            toast({ title: 'Success', description: 'Expense submitted for approval.' });
+            setCategory('');
+            setDescription('');
+            setAmount('');
+            setIsOpen(false);
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        }
+        setIsLoading(false);
+    }
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="w-full" disabled={run.status !== 'active'}>
+                    <Fuel className="mr-2 h-5 w-5"/>
+                    <span>Log Expense</span>
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Log Run Expense</DialogTitle>
+                    <DialogDescription>Record an expense that occurred during this sales run (e.g., fuel, repairs). This will require approval.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label>Category</Label>
+                        <ShadSelect value={category} onValueChange={setCategory}>
+                            <ShadSelectTrigger><ShadSelectValue placeholder="Select a category..."/></ShadSelectTrigger>
+                            <ShadSelectContent>
+                                <ShadSelectItem value="Fuel">Fuel</ShadSelectItem>
+                                <ShadSelectItem value="Vehicle Repair">Vehicle Repair</ShadSelectItem>
+                                <ShadSelectItem value="Other">Other</ShadSelectItem>
+                            </ShadSelectContent>
+                        </ShadSelect>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="exp-description">Description</Label>
+                        <Input id="exp-description" value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g., Topped up fuel at NNPC station"/>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="exp-amount">Amount (₦)</Label>
+                        <Input id="exp-amount" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))}/>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSubmit} disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Submit for Approval
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function ReportWasteDialog({ run, user, onWasteReported, remainingItems }: { run: SalesRun, user: User | null, onWasteReported: () => void, remainingItems: OrderItem[] }) {
+    const { toast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [items, setItems] = useState<OrderItem[]>([{ productId: '', name: '', quantity: 1, price: 0 }]);
+
+    const handleItemChange = (index: number, field: keyof OrderItem, value: string | number) => {
+        const newItems = [...items];
+        if (field === 'productId') {
+            const product = remainingItems.find(p => p.productId === value);
+            newItems[index] = { ...newItems[index], productId: value as string, name: product?.name || '', price: product?.price || 0 };
+        } else {
+             newItems[index][field as 'quantity' | 'price'] = Number(value);
+        }
+        setItems(newItems);
+    }
+    
+    const handleAddItem = () => {
+        setItems([...items, { productId: '', name: '', quantity: 1, price: 0 }]);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = async () => {
+        if (!user) return;
+        const validItems = items.filter(item => item.productId && item.quantity > 0);
+        if (validItems.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please add at least one item to report as waste.' });
+            return;
+        }
+
+        setIsLoading(true);
+        const productsWithCategories = await Promise.all(validItems.map(async item => {
+            const productDoc = await getDoc(doc(db, 'products', item.productId));
+            return {
+                ...item,
+                productCategory: productDoc.exists() ? productDoc.data().category : 'Unknown'
+            };
+        }));
+        
+        const result = await handleReportWaste({
+            items: productsWithCategories,
+            reason: 'Damaged in transit',
+            notes: `From Sales Run ${run.id}`
+        }, user);
+        
+        if (result.success) {
+            toast({ title: 'Success', description: 'Waste reported and stock updated.' });
+            onWasteReported();
+            setIsOpen(false);
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        }
+        setIsLoading(false);
+    }
+
+    return (
+         <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="w-full" disabled={run.status !== 'active'}>
+                    <Trash className="mr-2 h-5 w-5"/>
+                    <span>Report Waste</span>
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Report Waste from Run</DialogTitle>
+                    <DialogDescription>Log any items that were damaged or spoiled during this run. This will deduct them from your inventory.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2 max-h-96 overflow-y-auto">
+                    {items.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                            <ShadSelect value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val)}>
+                                <ShadSelectTrigger><ShadSelectValue placeholder="Select Product"/></ShadSelectTrigger>
+                                <ShadSelectContent>
+                                    {remainingItems.map(p => (
+                                        <ShadSelectItem key={p.productId} value={p.productId}>{p.name} (Avail: {p.quantity})</ShadSelectItem>
+                                    ))}
+                                </ShadSelectContent>
+                            </ShadSelect>
+                            <Input type="number" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} placeholder="Qty" className="w-24"/>
+                            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                        </div>
+                    ))}
+                     <Button variant="outline" size="sm" onClick={handleAddItem}><PlusCircle className="mr-2 h-4 w-4"/>Add Item</Button>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                    <Button variant="destructive" onClick={handleSubmit} disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Report Waste
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: SalesRun, user: User | null, onSaleMade: (order: CompletedOrder) => void, remainingItems: OrderItem[] }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
