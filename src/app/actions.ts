@@ -468,12 +468,11 @@ export type BakerDashboardStats = {
 export async function getBakerDashboardStats(bakerId: string): Promise<BakerDashboardStats> {
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weeklyProductionData = eachDayOfInterval({ start: weekStart, end: endOfWeek(now) }).map(day => ({
+    const weeklyProductionData = eachDayOfInterval({ start: weekStart, end: endOfDay(now) }).map(day => ({
         day: format(day, 'E'),
         quantity: 0,
     }));
     
-    // Fetch active batches for the specific baker
     const activeBatchesQuery = query(
         collection(db, 'production_batches'),
         where('requestedById', '==', bakerId),
@@ -482,7 +481,6 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
     const activeBatchesSnapshot = await getDocs(activeBatchesQuery);
     const activeBatchesCount = activeBatchesSnapshot.size;
 
-    // Fetch weekly production for the chart
     const completedBatchesQuery = query(
         collection(db, 'production_batches'),
         where('requestedById', '==', bakerId),
@@ -496,7 +494,7 @@ export async function getBakerDashboardStats(bakerId: string): Promise<BakerDash
         const batch = doc.data();
         const batchCompletedAt = (batch.completedAt as Timestamp)?.toDate();
         if (batchCompletedAt) {
-            const dayOfWeek = format(batchCompletedAt, 'E');
+            const dayOfWeek = format(batchCompletedAt, 'E'); // "Mon", "Tue", etc.
             const dayIndex = weeklyProductionData.findIndex(d => d.day === dayOfWeek);
             if (dayIndex !== -1) {
                 weeklyProductionData[dayIndex].quantity += batch.successfullyProduced || 0;
@@ -2029,11 +2027,9 @@ export type ProductionBatch = {
     id: string;
     recipeId: string;
     recipeName: string;
-    productName: string;
-    productId: string;
     requestedById: string;
     requestedByName: string;
-    quantityToProduce: number;
+    batchSize: 'full' | 'half';
     status: 'pending_approval' | 'in_production' | 'completed' | 'declined' | 'cancelled';
     createdAt: string; 
     approvedAt?: string;
@@ -2120,9 +2116,6 @@ export async function startProductionBatch(data: { recipeId: string, recipeName:
         await setDoc(newBatchRef, {
             recipeId: data.recipeId,
             recipeName: data.recipeName,
-            productName: recipeData.name, // Use recipe name
-            productId: recipeData.applicableProductIds?.[0] || '', // Default to first applicable, or empty
-            quantityToProduce: 1, // Defaulting to 1 batch
             batchSize: data.batchSize,
             id: newBatchRef.id,
             status: 'pending_approval',
@@ -2131,7 +2124,7 @@ export async function startProductionBatch(data: { recipeId: string, recipeName:
             requestedById: user.staff_id,
             requestedByName: user.name,
         });
-        await createProductionLog('Batch Requested', `Requested a batch using recipe: ${data.recipeName}`, user);
+        await createProductionLog('Batch Requested', `Requested a ${data.batchSize} batch using recipe: ${data.recipeName}`, user);
         return { success: true };
     } catch (error) {
         console.error("Error starting production batch:", error);
@@ -2182,9 +2175,9 @@ export async function approveIngredientRequest(batchId: string, ingredients: { i
         const requesterName = batchData?.requestedByName || 'Unknown';
         await setDoc(logRef, {
             ingredientId: '',
-            ingredientName: `Production Batch: ${batchData?.productName}`,
+            ingredientName: `Production Batch: ${batchData?.recipeName}`,
             change: -ingredients.reduce((sum, ing) => sum + ing.quantity, 0),
-            reason: `Production: ${batchData?.productName}`,
+            reason: `Production: ${batchData?.recipeName}`,
             date: serverTimestamp(),
             staffName: requesterName,
             logRefId: batchId,
@@ -2764,11 +2757,7 @@ export async function getProductsForStaff(staffId: string): Promise<{productId: 
     if (stockSnapshot.empty) return [];
 
     const productPromises = stockSnapshot.docs.map(stockDoc => {
-        const productId = stockDoc.data().productId;
-        if (!productId) {
-            console.warn(`Missing productId in personal_stock document for staff ${staffId}, doc ID: ${stockDoc.id}`);
-            return Promise.resolve(null);
-        }
+        const productId = stockDoc.id; // The document ID is the product ID
         return getDoc(doc(db, 'products', productId));
     });
 
@@ -2777,7 +2766,7 @@ export async function getProductsForStaff(staffId: string): Promise<{productId: 
     return stockSnapshot.docs.map((stockDoc, index) => {
         const productDoc = productSnapshots[index];
         if (!productDoc || !productDoc.exists()) {
-             console.warn(`Product with ID ${stockDoc.data().productId} not found for staff ${staffId}'s personal stock item ${stockDoc.id}.`);
+             console.warn(`Product with ID ${stockDoc.id} not found for staff ${staffId}'s personal stock item.`);
              return null;
         }
         const productData = productDoc.data();
@@ -3081,18 +3070,27 @@ export async function declineStockIncrease(requestId: string, user: { staff_id: 
 }
 
 export async function handleReturnStock(runId: string, unsoldItems: { productId: string; productName: string; quantity: number }[], user: { staff_id: string; name: string }, returnToStaffId: string): Promise<{success: boolean, error?: string}> {
+    if (!user?.staff_id) {
+        return { success: false, error: "User not found." };
+    }
+    
     try {
-        if (unsoldItems.length === 0) {
-            return { success: false, error: "No items selected to return." };
-        }
-        
-        const returnToStaffDoc = await getDoc(doc(db, "staff", returnToStaffId));
-        if (!returnToStaffDoc.exists()) {
-            throw new Error("Receiving staff member not found.");
-        }
-        const returnToStaff = returnToStaffDoc.data();
-        
         await runTransaction(db, async (transaction) => {
+            const returnToStaffDoc = await transaction.get(doc(db, "staff", returnToStaffId));
+            if (!returnToStaffDoc.exists()) {
+                throw new Error("Receiving staff member not found.");
+            }
+            const returnToStaff = returnToStaffDoc.data();
+
+            for (const item of unsoldItems) {
+                const personalStockRef = doc(db, 'staff', user.staff_id, 'personal_stock', item.productId);
+                const stockDoc = await transaction.get(personalStockRef);
+                if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
+                    throw new Error(`Not enough stock for ${item.productName}. You have ${stockDoc.data()?.stock || 0}, trying to return ${item.quantity}.`);
+                }
+                transaction.update(personalStockRef, { stock: increment(-item.quantity) });
+            }
+            
             const transferRef = doc(collection(db, 'transfers'));
             transaction.set(transferRef, {
                 from_staff_id: user.staff_id,
@@ -3110,11 +3108,6 @@ export async function handleReturnStock(runId: string, unsoldItems: { productId:
             if (runId !== 'showroom-return' && runId !== 'delivery-return') {
                 const originalRunRef = doc(db, 'transfers', runId);
                 transaction.update(originalRunRef, { status: 'pending_return' });
-            }
-
-            for (const item of unsoldItems) {
-                const personalStockRef = doc(db, 'staff', user.staff_id, 'personal_stock', item.productId);
-                transaction.update(personalStockRef, { stock: increment(-item.quantity) });
             }
         });
         
