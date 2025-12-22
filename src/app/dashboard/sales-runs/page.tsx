@@ -838,7 +838,6 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
                          <div className="border rounded-md p-2 space-y-4 max-h-60 overflow-y-auto">
                             {cart.length === 0 ? <p className="text-center text-muted-foreground text-sm p-4">Cart is empty</p> : (
                                  cart.map((item, index) => {
-                                    const product = remainingItems.find(p => p.productId === item.productId);
                                     const stockError = stockErrors[item.productId];
                                     return (
                                     <div key={`cart-item-${index}`} className="space-y-2 border-b pb-2 last:border-b-0">
@@ -859,7 +858,6 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
                                         </div>
                                         {priceErrors[item.productId] && <p className="text-xs text-destructive">{priceErrors[item.productId]}</p>}
                                         {stockError && !priceErrors[item.productId] && <p className="text-xs text-destructive">{stockError}</p>}
-                                        <p className="text-xs text-muted-foreground">Standard Price: {formatCurrency(product?.price)}, Range: {formatCurrency(product?.minPrice)} - {formatCurrency(product?.maxPrice)}</p>
                                     </div>
                                     )
                                 })
@@ -890,243 +888,6 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
             </DialogContent>
         </Dialog>
     )
-}
-
-function LogExpenseDialog({ run, user }: { run: SalesRun, user: User | null }) {
-    const { toast } = useToast();
-    const [isOpen, setIsOpen] = useState(false);
-    const [amount, setAmount] = useState<number | string>('');
-    const [description, setDescription] = useState('');
-    const [category, setCategory] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handleSubmit = async () => {
-        if (!amount || !description || !category || !user) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please fill out all fields.' });
-            return;
-        }
-
-        setIsSubmitting(true);
-        const result = await logRunExpense({
-            runId: run.id,
-            driverId: user.staff_id,
-            driverName: user.name,
-            amount: Number(amount),
-            category,
-            description,
-        });
-
-        if (result.success) {
-            toast({ title: 'Expense Submitted', description: 'Your expense has been sent for approval.' });
-            setIsOpen(false);
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: result.error });
-        }
-        setIsSubmitting(false);
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                 <Button variant="outline" className="w-full" disabled={run.status !== 'active'}>
-                    <Fuel className="mr-2 h-5 w-5"/>
-                    <span>Log Run Expense</span>
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Log Run Expense</DialogTitle>
-                    <DialogDescription>Record an expense incurred during this sales run. It will be submitted for approval.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                     <div className="space-y-2">
-                        <Label htmlFor="expense-category">Expense Category</Label>
-                        <ShadSelect value={category} onValueChange={setCategory}>
-                            <ShadSelectTrigger><ShadSelectValue placeholder="Select a category..."/></ShadSelectTrigger>
-                            <ShadSelectContent>
-                                <ShadSelectItem value="Fuel">Fuel</ShadSelectItem>
-                                <ShadSelectItem value="Toll">Toll / Levies</ShadSelectItem>
-                                <ShadSelectItem value="Vehicle-Repairs">Vehicle Repairs</ShadSelectItem>
-                                <ShadSelectItem value="Other">Other</ShadSelectItem>
-                            </ShadSelectContent>
-                        </ShadSelect>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="expense-description">Description</Label>
-                        <Textarea id="expense-description" value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Bought 10L of petrol at XYZ station"/>
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="expense-amount">Amount (₦)</Label>
-                        <Input id="expense-amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Submit for Approval
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function ReportWasteDialog({ run, user, onWasteReported, remainingItems }: { run: SalesRun, user: User, onWasteReported: () => void, remainingItems: { productId: string; name: string; price: number; quantity: number }[] }) {
-    const { toast } = useToast();
-    const [isOpen, setIsOpen] = useState(false);
-    const [items, setItems] = useState<{ productId: string, quantity: number | string }[]>([{ productId: '', quantity: 1 }]);
-    const [reason, setReason] = useState("");
-    const [notes, setNotes] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        if(isOpen) {
-            setItems([{ productId: '', quantity: 1 }]);
-            setReason('');
-            setNotes('');
-        }
-    }, [isOpen]);
-
-    const handleItemChange = (index: number, field: 'productId' | 'quantity', value: string) => {
-        const newItems = [...items];
-        if (field === 'quantity') {
-            const numValue = Number(value);
-            const productInfo = remainingItems.find(p => p.productId === newItems[index].productId);
-            if (productInfo && numValue > productInfo.quantity) {
-                toast({ variant: 'destructive', title: 'Error', description: `Cannot report more than ${productInfo.quantity} units of waste for this item.` });
-                newItems[index][field] = productInfo.quantity;
-            } else {
-                newItems[index][field] = value === '' ? '' : numValue;
-            }
-        } else {
-            newItems[index][field] = value;
-        }
-        setItems(newItems);
-    };
-
-    const handleAddItem = () => {
-        setItems([...items, { productId: '', quantity: 1 }]);
-    };
-
-    const handleRemoveItem = (index: number) => {
-        setItems(items.filter((_, i) => i !== index));
-    };
-
-    const handleSubmit = async () => {
-        if (items.some(item => !item.productId || !item.quantity || Number(item.quantity) <= 0) || !reason) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please fill out all product and reason fields correctly.' });
-            return;
-        }
-
-        setIsSubmitting(true);
-        const productsWithCategories = await Promise.all(items.map(async item => {
-            const productDoc = await getDoc(doc(db, 'products', item.productId));
-            return {
-                ...item,
-                quantity: Number(item.quantity),
-                productName: productDoc.exists() ? productDoc.data().name : 'Unknown',
-                productCategory: productDoc.exists() ? productDoc.data().category : 'Unknown'
-            };
-        }));
-
-        const dataToSubmit = {
-            items: productsWithCategories,
-            reason,
-            notes,
-        };
-
-        const result = await handleReportWaste(dataToSubmit, user);
-
-        if (result.success) {
-            toast({ title: 'Success', description: 'Waste reported successfully. Your inventory has been updated.' });
-            onWasteReported();
-            setIsOpen(false);
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: result.error });
-        }
-        setIsSubmitting(false);
-    };
-
-    const getAvailableProductsForRow = (rowIndex: number) => {
-        const selectedIdsInOtherRows = new Set(
-            items.filter((_, i) => i !== rowIndex).map(item => item.productId)
-        );
-        return remainingItems.filter(p => !selectedIdsInOtherRows.has(p.productId));
-    };
-
-    return (
-       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button variant="secondary" className="w-full" disabled={run.status !== 'active' || remainingItems.length === 0}>
-                    <Trash className="mr-2 h-5 w-5"/>
-                    <span>Report Waste</span>
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                 <DialogHeader>
-                    <DialogTitle>Report Spoiled or Damaged Stock</DialogTitle>
-                    <DialogDescription>
-                        Select items from this sales run that are no longer sellable. This will deduct them from your personal inventory.
-                    </DialogDescription>
-                </DialogHeader>
-                 <div className="space-y-6 py-4">
-                    <div className="space-y-2">
-                        <Label>Items to Report</Label>
-                        <div className="space-y-2">
-                            {items.map((item, index) => {
-                                const availableProducts = getAvailableProductsForRow(index);
-                                return (
-                                    <div key={`waste-item-${index}`} className="grid grid-cols-[1fr_120px_auto] gap-2 items-center">
-                                        <ShadSelect value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val)}>
-                                            <ShadSelectTrigger><ShadSelectValue placeholder="Select a product" /></ShadSelectTrigger>
-                                            <ShadSelectContent>
-                                                {availableProducts.map((p) => (
-                                                    <ShadSelectItem key={`${p.productId}-${index}`} value={p.productId}>
-                                                        {p.name} (Avail: {p.quantity})
-                                                    </ShadSelectItem>
-                                                ))}
-                                            </ShadSelectContent>
-                                        </ShadSelect>
-                                        <Input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        <Button variant="outline" size="sm" className="mt-2" onClick={handleAddItem}>
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add Another Item
-                        </Button>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="waste-reason">Reason for Waste</Label>
-                        <ShadSelect value={reason} onValueChange={setReason}>
-                            <ShadSelectTrigger id="waste-reason">
-                                <ShadSelectValue placeholder="Select a reason" />
-                            </ShadSelectTrigger>
-                            <ShadSelectContent>
-                            <ShadSelectItem value="Spoiled">Spoiled / Expired</ShadSelectItem>
-                            <ShadSelectItem value="Damaged">Damaged</ShadSelectItem>
-                            <ShadSelectItem value="Error">Error (Mistake)</ShadSelectItem>
-                            <ShadSelectItem value="Other">Other</ShadSelectItem>
-                            </ShadSelectContent>
-                        </ShadSelect>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="waste-notes">Additional Notes (Optional)</Label>
-                        <Input id="waste-notes" value={notes} onChange={e => setNotes(e.target.value)} />
-                    </div>
-                </div>
-                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Submit Report
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
 }
 
 function RecordPaymentDialog({ customer, run, user }: { customer: RunCustomer | null, run: SalesRun, user: User | null }) {
@@ -1537,6 +1298,7 @@ function SalesRunDetailsPageClientContent() {
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'outstanding', direction: 'desc' });
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [pendingReturns, setPendingReturns] = useState<any[]>([]);
 
     const fetchRunData = useCallback(async () => {
         if (!runId) return;
@@ -1550,6 +1312,7 @@ function SalesRunDetailsPageClientContent() {
         let unsubRun: (() => void) | undefined;
         let unsubOrders: (() => void) | undefined;
         let unsubPayments: (() => void) | undefined;
+        let unsubReturns: (() => void) | undefined;
         
         const userJSON = localStorage.getItem('loggedInUser');
         if (userJSON) {
@@ -1585,6 +1348,12 @@ function SalesRunDetailsPageClientContent() {
             unsubPayments = onSnapshot(query(collection(db, 'payment_confirmations'), where('runId', '==', runId as string), where('status', '==', 'pending')), (snapshot) => {
                 setPaymentConfirmations(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
             });
+
+            const returnsQuery = query(collection(db, 'transfers'), where('originalRunId', '==', runId), where('status', '==', 'pending_return'));
+            unsubReturns = onSnapshot(returnsQuery, (snapshot) => {
+                setPendingReturns(snapshot.docs.map(doc => doc.data()));
+            });
+
         } else {
              setIsLoading(false);
         }
@@ -1593,6 +1362,7 @@ function SalesRunDetailsPageClientContent() {
             unsubRun?.();
             unsubOrders?.();
             unsubPayments?.();
+            unsubReturns?.();
         };
     }, [runId, isLoading]);
     
@@ -1684,7 +1454,7 @@ function SalesRunDetailsPageClientContent() {
             };
         }).filter(item => item.quantity > 0);
     }, [run, orders]);
-    
+
     const { progressValue, progressDenominator } = useMemo(() => {
         if (!run) return { progressValue: 0, progressDenominator: 1 };
         
@@ -1869,21 +1639,24 @@ function SalesRunDetailsPageClientContent() {
                                 <TableHead>Product</TableHead>
                                 <TableHead className="text-right">Initial Qty</TableHead>
                                 <TableHead className="text-right">Sold</TableHead>
-                                <TableHead className="text-right">Remaining</TableHead>
+                                <TableHead className="text-right">Returned (Pending)</TableHead>
+                                <TableHead className="text-right">Net Remaining</TableHead>
                                 {user?.role === 'Developer' && <TableHead className="text-right">Actions</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {run.items.map(item => {
                                 const soldQuantity = orders.flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
-                                const remaining = item.quantity - soldQuantity;
+                                const pendingReturnQty = pendingReturns.flatMap(pr => pr.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
+                                const netRemaining = item.quantity - soldQuantity - pendingReturnQty;
                                 const fullProduct = allProducts.find(p => p.id === item.productId);
                                 return (
                                     <TableRow key={item.productId}>
                                         <TableCell>{item.productName}</TableCell>
                                         <TableCell className="text-right">{item.quantity}</TableCell>
                                         <TableCell className="text-right">{soldQuantity}</TableCell>
-                                        <TableCell className="text-right font-bold">{remaining}</TableCell>
+                                        <TableCell className="text-right text-orange-500">{pendingReturnQty}</TableCell>
+                                        <TableCell className="text-right font-bold">{netRemaining}</TableCell>
                                         {user?.role === 'Developer' && (
                                             <TableCell className="text-right">
                                                 <Button variant="ghost" size="icon" onClick={() => setEditingProduct(fullProduct!)}>
