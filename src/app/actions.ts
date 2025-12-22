@@ -1,4 +1,5 @@
 
+
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -1484,23 +1485,20 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
 
             const confirmationData = confirmationDoc.data() as PaymentConfirmation;
             if (confirmationData.status !== 'pending') throw new Error("This confirmation has already been processed.");
-
-            const runRef = confirmationData.runId && !confirmationData.runId.startsWith('pos-sale-')
-                ? doc(db, 'transfers', confirmationData.runId)
-                : null;
-                
-            const customerRef = confirmationData.customerId
-                ? doc(db, 'customers', confirmationData.customerId)
-                : null;
             
             const newStatus = action === 'approve' ? 'approved' : 'declined';
             transaction.update(confirmationRef, { status: newStatus });
 
             if (action === 'approve') {
-                 if (runRef) {
+                const isPosSale = confirmationData.runId && confirmationData.runId.startsWith('pos-sale-');
+                
+                if (!isPosSale) {
+                    const runRef = doc(db, 'transfers', confirmationData.runId);
                     transaction.update(runRef, { totalCollected: increment(confirmationData.amount) });
                 }
-                if (confirmationData.isDebtPayment && customerRef) {
+
+                if (confirmationData.isDebtPayment && confirmationData.customerId) {
+                    const customerRef = doc(db, 'customers', confirmationData.customerId);
                     transaction.update(customerRef, { amountPaid: increment(confirmationData.amount) });
                 } else if (confirmationData.isExpense) {
                     const expenseData = {
@@ -1512,21 +1510,29 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                     };
                     const newIndirectCostRef = doc(collection(db, "indirectCosts"));
                     transaction.set(newIndirectCostRef, expenseData);
-                } else { // It's a new sale confirmation
-                    const newOrderRef = doc(collection(db, 'orders'));
-                    transaction.set(newOrderRef, {
-                        salesRunId: confirmationData.runId,
-                        customerId: confirmationData.customerId || 'walk-in',
-                        customerName: confirmationData.customerName,
-                        total: confirmationData.amount,
-                        paymentMethod: confirmationData.paymentMethod,
-                        date: Timestamp.now(),
-                        staffId: confirmationData.driverId,
-                        status: 'Completed',
-                        items: confirmationData.items,
-                        id: newOrderRef.id,
-                        isDebtPayment: false,
-                    });
+                } else { // It's a new sale confirmation, so update the 'sales' collection
+                    const salesDate = confirmationData.date ? new Date(confirmationData.date) : new Date();
+                    const salesDocId = format(salesDate, 'yyyy-MM-dd');
+                    const salesDocRef = doc(db, 'sales', salesDocId);
+                    const salesDoc = await transaction.get(salesDocRef);
+
+                    const paymentMethodKey = (confirmationData.paymentMethod || 'cash').toLowerCase();
+                    const amount = confirmationData.amount;
+
+                    if (salesDoc.exists()) {
+                        const updates: Record<string, any> = { total: increment(amount) };
+                        updates[paymentMethodKey] = increment(amount);
+                        transaction.update(salesDocRef, updates);
+                    } else {
+                        const initialData: Record<string, any> = {
+                            date: Timestamp.fromDate(startOfDay(salesDate)),
+                            description: `Daily Sales for ${salesDocId}`,
+                            cash: 0, pos: 0, creditSales: 0, shortage: 0,
+                            total: amount,
+                        };
+                        initialData[paymentMethodKey] = amount;
+                        transaction.set(salesDocRef, initialData);
+                    }
                 }
             }
         });
@@ -1536,6 +1542,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
         return { success: false, error: `Failed to ${action} payment. ${(error as Error).message}` };
     }
 }
+
 
 
 
@@ -3285,3 +3292,4 @@ export async function returnUnusedIngredients(
     
 
     
+
