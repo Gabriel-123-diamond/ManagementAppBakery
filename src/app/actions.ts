@@ -2474,10 +2474,13 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
         salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
       }
       
-      salesByCustomer[customerId].totalSold += order.total;
-      
-      if (order.paymentMethod !== 'Credit') {
-        salesByCustomer[customerId].totalPaid += order.total;
+      // Only count completed orders towards sales totals
+      if (order.status === 'Completed') {
+          salesByCustomer[customerId].totalSold += order.total;
+          
+          if (order.paymentMethod !== 'Credit') {
+            salesByCustomer[customerId].totalPaid += order.total;
+          }
       }
     });
 
@@ -2516,7 +2519,7 @@ export async function getOrdersForRun(runId: string): Promise<any[]> {
     }
 }
 
-type PartialPayment = {
+type PartialPaymentData = {
     method: 'Cash' | 'POS';
     amount: number;
 }
@@ -2526,7 +2529,7 @@ type SaleData = {
     customerId: string;
     customerName: string;
     paymentMethod: 'Cash' | 'Credit' | 'POS' | 'Split';
-    partialPayments?: PartialPayment[];
+    partialPayments?: PartialPaymentData[];
     staffId: string;
     total: number;
 }
@@ -2623,7 +2626,7 @@ type PosSaleData = {
     items: { productId: string; quantity: number; price: number, name: string, costPrice: number }[];
     customerName: string;
     paymentMethod: 'Cash' | 'POS' | 'Split' | 'Paystack';
-    partialPayments?: PartialPayment[];
+    partialPayments?: PartialPaymentData[];
     staffId: string;
     staffName: string;
     total: number;
@@ -2658,7 +2661,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 date: Timestamp.fromDate(orderDate),
                 staffId: data.staffId,
                 staffName: data.staffName,
-                status: 'Pending', // Change status to Pending
+                status: 'Pending',
             };
             
             transaction.set(newOrderRef, orderData);
