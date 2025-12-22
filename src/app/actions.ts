@@ -1441,6 +1441,7 @@ export type PaymentConfirmation = {
   driverId: string;
   driverName: string;
   runId: string;
+  orderId?: string; // Link to the specific order
   amount: number;
   status: 'pending' | 'approved' | 'declined';
   customerName?: string;
@@ -1492,7 +1493,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (action === 'approve') {
                 const isPosSale = confirmationData.runId && confirmationData.runId.startsWith('pos-sale-');
                 
-                if (!isPosSale) {
+                if (!isPosSale && confirmationData.runId) {
                     const runRef = doc(db, 'transfers', confirmationData.runId);
                     transaction.update(runRef, { totalCollected: increment(confirmationData.amount) });
                 }
@@ -1510,7 +1511,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                     };
                     const newIndirectCostRef = doc(collection(db, "indirectCosts"));
                     transaction.set(newIndirectCostRef, expenseData);
-                } else { // It's a new sale confirmation, so update the 'sales' collection
+                } else { 
                     const salesDate = confirmationData.date ? new Date(confirmationData.date) : new Date();
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
@@ -1533,6 +1534,19 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         initialData[paymentMethodKey] = amount;
                         transaction.set(salesDocRef, initialData);
                     }
+                }
+            } else if (action === 'decline') {
+                // If a sale is declined, reverse the stock deduction
+                if (!confirmationData.isExpense && confirmationData.items?.length > 0) {
+                    for (const item of confirmationData.items) {
+                        const staffStockRef = doc(db, 'staff', confirmationData.driverId, 'personal_stock', item.productId);
+                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                    }
+                }
+                // Also mark the original order as cancelled
+                if (confirmationData.orderId) {
+                    const orderRef = doc(db, 'orders', confirmationData.orderId);
+                    transaction.update(orderRef, { status: 'Cancelled' });
                 }
             }
         });
@@ -2533,7 +2547,6 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             }
 
             const driverName = staffDoc.data()?.name || 'Unknown';
-            const isPendingApproval = ['Cash', 'POS', 'Split'].includes(data.paymentMethod);
             const isCreditSale = data.paymentMethod === 'Credit';
             
             const newOrderRef = doc(collection(db, 'orders'));
@@ -2548,7 +2561,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 date: Timestamp.now(),
                 staffId: data.staffId,
                 staffName: driverName,
-                status: 'Completed',
+                status: 'Completed', // Or 'Pending' if you want approval even for credit
                 id: newOrderRef.id,
                 isDebtPayment: false,
             });
@@ -2563,10 +2576,11 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 if (customerRef) {
                     transaction.update(customerRef, { amountOwed: increment(data.total) });
                 }
-            } else if (isPendingApproval) {
+            } else {
                 const confirmationRef = doc(collection(db, 'payment_confirmations'));
                 transaction.set(confirmationRef, {
                     runId: data.runId,
+                    orderId: newOrderRef.id,
                     customerId: data.customerId,
                     customerName: data.customerName,
                     items: data.items,
@@ -2619,10 +2633,6 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
 
             await Promise.all(stockChecks);
 
-            const salesDocId = format(orderDate, 'yyyy-MM-dd');
-            const salesDocRef = doc(db, 'sales', salesDocId);
-            const salesDoc = await transaction.get(salesDocRef);
-
             const orderData = {
                 id: newOrderRef.id,
                 salesRunId: `pos-sale-${newOrderRef.id}`,
@@ -2644,38 +2654,21 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
-             // Create individual sales entries based on payment methods
-            const paymentMethods = data.paymentMethod === 'Split' && data.partialPayments 
-                ? data.partialPayments 
-                : [{ method: data.paymentMethod, amount: data.total }];
-
-            const dailyTotals: Record<string, number> = {};
-            let totalSale = 0;
-
-            for (const payment of paymentMethods) {
-                const methodKey = payment.method.toLowerCase();
-                if (methodKey) {
-                    dailyTotals[methodKey] = (dailyTotals[methodKey] || 0) + payment.amount;
-                    totalSale += payment.amount;
-                }
-            }
-            
-            if (salesDoc.exists()) {
-                const updates: Record<string, any> = { total: increment(totalSale) };
-                for (const key in dailyTotals) {
-                    updates[key] = increment(dailyTotals[key]);
-                }
-                transaction.update(salesDocRef, updates);
-            } else {
-                const initialData = {
-                    date: Timestamp.fromDate(startOfDay(orderDate)),
-                    description: `Daily Sales for ${salesDocId}`,
-                    cash: 0, pos: 0, creditSales: 0, shortage: 0,
-                    ...dailyTotals,
-                    total: totalSale,
-                };
-                transaction.set(salesDocRef, initialData);
-            }
+            const confirmationRef = doc(collection(db, 'payment_confirmations'));
+            transaction.set(confirmationRef, {
+                runId: `pos-sale-${newOrderRef.id}`,
+                orderId: newOrderRef.id,
+                customerId: 'walk-in',
+                customerName: data.customerName,
+                items: data.items,
+                amount: data.total,
+                driverId: data.staffId,
+                driverName: data.staffName,
+                date: serverTimestamp(),
+                status: 'pending',
+                paymentMethod: data.paymentMethod,
+                isDebtPayment: false,
+            });
         });
 
         return { success: true, orderId: newOrderRef.id };
