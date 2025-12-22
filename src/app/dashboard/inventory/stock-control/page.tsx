@@ -61,7 +61,7 @@ import { cn } from "@/lib/utils";
 import { collection, getDocs, query, where, orderBy, Timestamp, getDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getReturnedStockTransfers, getProductionBatches } from "@/app/actions";
+import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getReturnedStockTransfers, getProductionBatches, getProductsForStaff } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -186,7 +186,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
-
+    
     const ingredientsWithStock = useMemo(() => {
         return batch.ingredients.map(reqIng => {
             const stockIng = allIngredients.find(sIng => sIng.id === reqIng.ingredientId);
@@ -197,7 +197,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
     }, [batch.ingredients, allIngredients]);
 
     const canApprove = ingredientsWithStock.every(ing => ing.hasEnough);
-
+    
     const handleApprove = async () => {
         setIsLoading(true);
         const result = await approveIngredientRequest(batch.id, batch.ingredients, user);
@@ -702,7 +702,7 @@ export default function StockControlPage() {
 
     setIsSubmitting(true);
     const staffMember = staff.find(s => s.staff_id === transferTo);
-
+    
     const transferData = {
         to_staff_id: transferTo,
         to_staff_name: staffMember?.name || 'Unknown',
@@ -727,7 +727,7 @@ export default function StockControlPage() {
 
     setIsSubmitting(false);
   };
-
+  
   const handleAcknowledge = async (id: string, type: 'accept' | 'decline') => {
     setIsSubmitting(true);
     const result = await handleAcknowledgeTransfer(id, type);
@@ -765,7 +765,7 @@ export default function StockControlPage() {
   const paginatedAllPending = useMemo(() => {
     return visibleAllPendingRows === 'all' ? allPendingTransfers : allPendingTransfers.slice(0, visibleAllPendingRows);
   }, [allPendingTransfers, visibleAllPendingRows]);
-
+  
   const paginatedInitiatedLogs = useMemo(() => {
     let filtered = initiatedTransfers.filter(t => t.from_staff_id === user?.staff_id && !t.notes?.includes('Return from production batch'));
     if (date?.from) {
@@ -814,7 +814,7 @@ export default function StockControlPage() {
   const isStorekeeper = userRole === 'Storekeeper';
   const isBaker = userRole === 'Baker' || userRole === 'Chief Baker';
   const canInitiateTransfer = isManagerOrDev || isStorekeeper;
-
+  
   if (!user || isLoading) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -945,7 +945,7 @@ export default function StockControlPage() {
                                                         {t.items.reduce((sum, item) => sum + item.quantity, 0)} items
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        <AcceptTransferDialog transfer={t} onAccept={handleAcknowledge}>
+                                                         <AcceptTransferDialog transfer={t} onAccept={handleAcknowledge}>
                                                             <Button size="sm">View & Acknowledge</Button>
                                                         </AcceptTransferDialog>
                                                     </TableCell>
@@ -1524,3 +1524,4 @@ export default function StockControlPage() {
     </div>
   );
 }
+

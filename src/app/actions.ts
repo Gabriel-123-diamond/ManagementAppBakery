@@ -2029,8 +2029,8 @@ export type ProductionBatch = {
     id: string;
     recipeId: string;
     recipeName: string;
-    productId: string;
     productName: string;
+    productId: string;
     requestedById: string;
     requestedByName: string;
     quantityToProduce: number;
@@ -2102,23 +2102,13 @@ async function createProductionLog(action: string, details: string, user: { staf
     }
 }
 
-type StartProductionData = {
-  recipe: any; // Full recipe object
-  recipeId: string;
-  recipeName: string;
-  productName: string;
-  productId: string;
-  quantityToProduce: number;
-  batchSize: 'full' | 'half';
-}
-
-export async function startProductionBatch(data: StartProductionData, user: { staff_id: string, name: string, role: string }): Promise<{success: boolean, error?: string}> {
+export async function startProductionBatch(data: { recipeId: string, recipeName: string, batchSize: 'full' | 'half' }, user: { staff_id: string, name: string, role: string }): Promise<{success: boolean, error?: string}> {
     try {
-        // The recipe object is passed directly, so no need to fetch from DB if it exists
-        const recipeData = data.recipe;
-        if (!recipeData) {
-            return { success: false, error: "Recipe data not provided." };
+        const recipeDoc = await getDoc(doc(db, "recipes", data.recipeId));
+        if (!recipeDoc.exists()) {
+            return { success: false, error: "Recipe not found." };
         }
+        const recipeData = recipeDoc.data();
 
         const baseIngredients = recipeData.ingredients;
         const finalIngredients = baseIngredients.map((ing: any) => ({
@@ -2130,9 +2120,9 @@ export async function startProductionBatch(data: StartProductionData, user: { st
         await setDoc(newBatchRef, {
             recipeId: data.recipeId,
             recipeName: data.recipeName,
-            productName: data.productName,
-            productId: data.productId,
-            quantityToProduce: data.quantityToProduce,
+            productName: recipeData.name, // Use recipe name
+            productId: recipeData.applicableProductIds?.[0] || '', // Default to first applicable, or empty
+            quantityToProduce: 1, // Defaulting to 1 batch
             batchSize: data.batchSize,
             id: newBatchRef.id,
             status: 'pending_approval',
@@ -2141,7 +2131,7 @@ export async function startProductionBatch(data: StartProductionData, user: { st
             requestedById: user.staff_id,
             requestedByName: user.name,
         });
-        await createProductionLog('Batch Requested', `Requested a batch of ${data.productName}`, user);
+        await createProductionLog('Batch Requested', `Requested a batch using recipe: ${data.recipeName}`, user);
         return { success: true };
     } catch (error) {
         console.error("Error starting production batch:", error);
@@ -2199,7 +2189,7 @@ export async function approveIngredientRequest(batchId: string, ingredients: { i
             staffName: requesterName,
             logRefId: batchId,
         });
-         await createProductionLog('Batch Approved', `Approved batch for ${batchData?.quantityToProduce} of ${batchData?.productName}: ${batchDocForLog.id}`, user);
+         await createProductionLog('Batch Approved', `Approved batch for recipe ${batchData?.recipeName}: ${batchDocForLog.id}`, user);
     } catch (logError) {
          console.error("Error creating stock log for request:", logError);
     }
@@ -2215,7 +2205,7 @@ export async function declineProductionBatch(batchId: string, user: { staff_id: 
         
         const batchDoc = await getDoc(batchRef);
         const batchData = batchDoc.data();
-        await createProductionLog('Batch Declined', `Declined batch for ${batchData?.quantityToProduce} of ${batchData?.productName}: ${batchId}`, user);
+        await createProductionLog('Batch Declined', `Declined batch for recipe ${batchData?.recipeName}: ${batchId}`, user);
 
         return { success: true };
     } catch (error) {
@@ -2235,7 +2225,7 @@ export async function cancelProductionBatch(batchId: string, user: { staff_id: s
         await updateDoc(batchRef, { status: 'cancelled' });
         
         const batchData = batchDoc.data();
-        await createProductionLog('Batch Cancelled', `Cancelled batch for ${batchData?.quantityToProduce} of ${batchData?.productName}: ${batchId}`, user);
+        await createProductionLog('Batch Cancelled', `Cancelled batch for recipe ${batchData?.recipeName}: ${batchId}`, user);
 
         return { success: true };
     } catch (error) {
@@ -2737,7 +2727,7 @@ export async function handleSaveRecipe(recipeData: Omit<any, 'id'>, recipeId: st
             await createProductionLog('Recipe Updated', `Updated recipe: ${recipeData.name}`, user);
         } else {
             const recipeRef = doc(collection(db, 'recipes'));
-            await setDoc(recipeRef, recipeData);
+            await setDoc(recipeRef, { ...recipeData, id: recipeRef.id });
             await createProductionLog('Recipe Created', `Created new recipe: ${recipeData.name}`, user);
         }
         return { success: true };
@@ -2774,13 +2764,23 @@ export async function getProductsForStaff(staffId: string): Promise<{productId: 
     if (stockSnapshot.empty) return [];
 
     const productPromises = stockSnapshot.docs.map(stockDoc => {
-        return getDoc(doc(db, 'products', stockDoc.data().productId));
+        const productId = stockDoc.data().productId;
+        if (!productId) {
+            console.warn(`Missing productId in personal_stock document for staff ${staffId}, doc ID: ${stockDoc.id}`);
+            return Promise.resolve(null);
+        }
+        return getDoc(doc(db, 'products', productId));
     });
+
     const productSnapshots = await Promise.all(productPromises);
     
     return stockSnapshot.docs.map((stockDoc, index) => {
         const productDoc = productSnapshots[index];
-        const productData = productDoc.exists() ? productDoc.data() : {};
+        if (!productDoc || !productDoc.exists()) {
+             console.warn(`Product with ID ${stockDoc.data().productId} not found for staff ${staffId}'s personal stock item ${stockDoc.id}.`);
+             return null;
+        }
+        const productData = productDoc.data();
         return {
             productId: stockDoc.id,
             name: stockDoc.data().productName,
@@ -2790,7 +2790,7 @@ export async function getProductsForStaff(staffId: string): Promise<{productId: 
             minPrice: productData.minPrice || 0,
             maxPrice: productData.maxPrice || 0,
         };
-    });
+    }).filter((p): p is {productId: string, name: string, stock: number, price: number, costPrice: number, minPrice: number, maxPrice: number} => p !== null);
 }
 export async function getIngredients(): Promise<any[]> {
     const snapshot = await getDocs(collection(db, "ingredients"));
