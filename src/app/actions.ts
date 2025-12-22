@@ -1491,27 +1491,8 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             transaction.update(confirmationRef, { status: newStatus });
 
             if (action === 'approve') {
-                const isPosSale = confirmationData.runId && confirmationData.runId.startsWith('pos-sale-');
-                
-                if (!isPosSale && confirmationData.runId) {
-                    const runRef = doc(db, 'transfers', confirmationData.runId);
-                    transaction.update(runRef, { totalCollected: increment(confirmationData.amount) });
-                }
-
-                if (confirmationData.isDebtPayment && confirmationData.customerId) {
-                    const customerRef = doc(db, 'customers', confirmationData.customerId);
-                    transaction.update(customerRef, { amountPaid: increment(confirmationData.amount) });
-                } else if (confirmationData.isExpense) {
-                    const expenseData = {
-                        category: confirmationData.expenseDetails?.category || 'Run Expense',
-                        description: confirmationData.expenseDetails?.description || `Expense for run ${confirmationData.runId}`,
-                        amount: confirmationData.amount,
-                        date: serverTimestamp(),
-                        details: [{ name: confirmationData.driverName, amount: confirmationData.amount }]
-                    };
-                    const newIndirectCostRef = doc(collection(db, "indirectCosts"));
-                    transaction.set(newIndirectCostRef, expenseData);
-                } else { 
+                // If it was a sale, now we finalize it by creating a sales record and updating order
+                if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
                     const salesDate = confirmationData.date ? new Date(confirmationData.date) : new Date();
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
@@ -1534,6 +1515,38 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         initialData[paymentMethodKey] = amount;
                         transaction.set(salesDocRef, initialData);
                     }
+                    // Update original order to completed
+                    if(confirmationData.orderId) {
+                        const orderRef = doc(db, 'orders', confirmationData.orderId);
+                        transaction.update(orderRef, { status: 'Completed' });
+                    }
+                }
+                
+                // If it was a debt payment
+                if (confirmationData.isDebtPayment && confirmationData.customerId) {
+                    const customerRef = doc(db, 'customers', confirmationData.customerId);
+                    transaction.update(customerRef, { amountPaid: increment(confirmationData.amount) });
+                } 
+                
+                // If it was an expense
+                else if (confirmationData.isExpense) {
+                    const expenseData = {
+                        category: confirmationData.expenseDetails?.category || 'Run Expense',
+                        description: confirmationData.expenseDetails?.description || `Expense for run ${confirmationData.runId}`,
+                        amount: confirmationData.amount,
+                        date: serverTimestamp(),
+                        details: [{ name: confirmationData.driverName, amount: confirmationData.amount }]
+                    };
+                    const newIndirectCostRef = doc(collection(db, "indirectCosts"));
+                    transaction.set(newIndirectCostRef, expenseData);
+                }
+                 // Update run's totalCollected regardless of type (except for expenses which are handled differently)
+                if (!confirmationData.isExpense && confirmationData.runId) {
+                     const isPosSale = confirmationData.runId.startsWith('pos-sale-');
+                     if (!isPosSale) {
+                        const runRef = doc(db, 'transfers', confirmationData.runId);
+                        transaction.update(runRef, { totalCollected: increment(confirmationData.amount) });
+                     }
                 }
             } else if (action === 'decline') {
                 // If a sale is declined, reverse the stock deduction
@@ -2561,7 +2574,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 date: Timestamp.now(),
                 staffId: data.staffId,
                 staffName: driverName,
-                status: 'Completed', // Or 'Pending' if you want approval even for credit
+                status: isCreditSale ? 'Completed' : 'Pending',
                 id: newOrderRef.id,
                 isDebtPayment: false,
             });
@@ -2645,7 +2658,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 date: Timestamp.fromDate(orderDate),
                 staffId: data.staffId,
                 staffName: data.staffName,
-                status: 'Completed',
+                status: 'Pending', // Change status to Pending
             };
             
             transaction.set(newOrderRef, orderData);
@@ -3285,4 +3298,3 @@ export async function returnUnusedIngredients(
     
 
     
-

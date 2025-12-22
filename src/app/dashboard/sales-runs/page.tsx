@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
@@ -701,7 +702,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
         const result = await handleSellToCustomer(saleData as any);
 
         if (result.success && result.orderId) {
-            toast({ title: 'Success', description: 'Sale has been recorded.' });
+            toast({ title: 'Success', description: 'Sale has been submitted for approval.' });
             onSaleMade({
                 id: result.orderId,
                 items: cart,
@@ -710,7 +711,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
                 paymentMethod: partialPayments ? 'Split' : paymentMethod,
                 partialPayments,
                 customerName: saleData.customerName,
-                status: 'Completed',
+                status: 'Pending',
                 subtotal: total, tax: 0
             });
             setIsOpen(false);
@@ -816,7 +817,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
                     <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
                     <Button onClick={() => handleSubmit()} disabled={isLoading || cart.length === 0}>
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Record Sale
+                        Submit for Approval
                     </Button>
                 </DialogFooter>
                  <SplitPaymentDialog 
@@ -961,7 +962,7 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
         const result = await handleSellToCustomer(saleData);
 
         if (result.success && result.orderId) {
-            toast({ title: 'Pending Approval', description: 'Custom sale has been submitted for accountant approval.' });
+            toast({ title: 'Success', description: 'Custom sale submitted for approval.' });
             setIsOpen(false);
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
