@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getSalesRunDetails, SalesRun, getCustomersForRun, handleSellToCustomer, handleRecordDebtPaymentForRun, getOrdersForRun, handleCompleteRun, handleReturnStock, handleReportWaste, logRunExpense, getProductsForStaff, getStaffList, getProducts } from '@/app/actions';
-import { Loader2, ArrowLeft, User, Package, HandCoins, PlusCircle, Trash2, CreditCard, Wallet, Plus, Minus, Printer, ArrowRightLeft, ArrowUpDown, RefreshCw, Undo2, CheckCircle, Trash, SquareTerminal, FileSignature, Car, Fuel, Receipt as ReceiptIcon, Building, Edit } from 'lucide-react';
+import { Loader2, ArrowLeft, User, Package, HandCoins, PlusCircle, Trash2, CreditCard, Wallet, Plus, Minus, Printer, ArrowRightLeft, ArrowUpDown, RefreshCw, Undo2, CheckCircle, Trash, SquareTerminal, FileSignature, Car, Fuel, Receipt as ReceiptIcon, Building, Edit, Check } from 'lucide-react';
 import Link from 'next/link';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -35,8 +35,10 @@ type Customer = {
 };
 
 type PartialPayment = {
-    method: 'Cash' | 'POS';
+    id: number;
+    method: 'Cash' | 'POS' | '';
     amount: number;
+    confirmed: boolean;
 }
 type OrderItem = { productId: string; quantity: number, price: number, name: string, costPrice?: number, minPrice?: number, maxPrice?: number };
 
@@ -226,7 +228,7 @@ function CreateCustomerDialog({ onCustomerCreated, children }: { onCustomerCreat
                 amountOwed: 0,
                 amountPaid: 0,
             });
-            const newCustomer = { id: newCustomerRef.id, name, phone, email, address, amountOwed: 0, amountPaid: 0 };
+            const newCustomer = { id: newCustomerRef.id, name, phone, email, address };
             onCustomerCreated(newCustomer as Customer);
             toast({ title: 'Success', description: 'New customer created.' });
             setIsOpen(false);
@@ -268,6 +270,151 @@ function CreateCustomerDialog({ onCustomerCreated, children }: { onCustomerCreat
             </DialogContent>
         </Dialog>
     )
+}
+
+function SplitPaymentDialog({
+  isOpen,
+  onOpenChange,
+  total,
+  onFinalize,
+}: {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  total: number
+  onFinalize: (payments: Omit<PartialPayment, 'id' | 'confirmed'>[]) => void
+}) {
+  const [payments, setPayments] = useState<PartialPayment[]>([]);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      setPayments([{ id: Date.now(), method: '', amount: total, confirmed: false }]);
+    }
+  }, [isOpen, total]);
+  
+  const totalAllocated = useMemo(() => {
+    return payments.reduce(
+        (acc, p) => acc + Number(p.amount || 0),
+        0
+      )
+  }, [payments]);
+
+  const remainingToAllocate = useMemo(() => total - totalAllocated, [total, totalAllocated]);
+
+  const handleMethodChange = (id: number, method: 'Cash' | 'POS' | '') => {
+    setPayments(
+      payments.map((p) => (p.id === id ? { ...p, method } : p))
+    )
+  }
+
+  const handleAmountChange = (id: number, amountStr: string) => {
+    const newAmount = parseFloat(amountStr) || 0;
+    
+    setPayments(prevPayments => 
+        prevPayments.map(p => p.id === id ? { ...p, amount: newAmount } : p)
+    );
+  };
+
+  const addPaymentMethod = () => {
+    if (remainingToAllocate <= 0) {
+        toast({variant: 'destructive', title: "Balance Cleared", description: "The total amount has already been allocated."});
+        return;
+    }
+    setPayments([
+      ...payments,
+      { id: Date.now(), method: '', amount: remainingToAllocate, confirmed: false },
+    ])
+  }
+
+  const removePaymentMethod = (id: number) => {
+    setPayments(payments.filter((p) => p.id !== id));
+  }
+  
+  const handleFinalize = () => {
+    if (Math.abs(remainingToAllocate) > 0.01) {
+        toast({ variant: 'destructive', title: 'Unallocated Amount', description: `Please allocate the remaining ₦${remainingToAllocate.toFixed(2)}.` });
+        return;
+    }
+    const finalPayments = payments.map(({id, confirmed, ...rest}) => rest);
+    onFinalize(finalPayments);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Split Payment</DialogTitle>
+          <DialogDescription>
+            Total Amount:{" "}
+            <span className="font-bold text-foreground">
+              ₦{total.toFixed(2)}
+            </span>
+            <br />
+            Remaining to Allocate:{" "}
+            <span className="font-bold text-destructive">
+              ₦{remainingToAllocate.toFixed(2)}
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4 max-h-80 overflow-y-auto">
+          {payments.map((payment) => (
+              <div
+                key={payment.id}
+                className="grid grid-cols-[1fr_120px_auto] items-center gap-2"
+              >
+                <ShadSelect
+                  value={payment.method}
+                  onValueChange={(value: 'Cash' | 'POS' | '') =>
+                    handleMethodChange(payment.id, value)
+                  }
+                >
+                  <ShadSelectTrigger>
+                    <ShadSelectValue placeholder="Select Method..." />
+                  </ShadSelectTrigger>
+                  <ShadSelectContent>
+                      <ShadSelectItem value="Cash">Cash</ShadSelectItem>
+                      <ShadSelectItem value="POS">POS</ShadSelectItem>
+                  </ShadSelectContent>
+                </ShadSelect>
+                <Input
+                  type="number"
+                  placeholder="Amount"
+                  value={payment.amount > 0 ? payment.amount : ''}
+                  onChange={(e) => handleAmountChange(payment.id, e.target.value)}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removePaymentMethod(payment.id)}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          <div className="flex justify-start">
+             <Button
+                variant="outline"
+                onClick={addPaymentMethod}
+                disabled={remainingToAllocate <= 0}
+            >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Payment Method
+            </Button>
+          </div>
+        </div>
+        <DialogFooter className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+             <Button
+                onClick={handleFinalize}
+                disabled={Math.abs(remainingToAllocate) > 0.01}
+            >
+                <Check className="mr-2 h-4 w-4" />
+                Record Sale
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: SalesRun, user: User | null, onSaleMade: (order: CompletedOrder) => void, remainingItems: OrderItem[] }) {
@@ -493,7 +640,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
                     isOpen={isSplitPaymentOpen} 
                     onOpenChange={setIsSplitPaymentOpen} 
                     total={total} 
-                    onFinalize={handleSubmit} 
+                    onFinalize={handleSubmit}
                 />
             </DialogContent>
         </Dialog>
@@ -1973,3 +2120,5 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
+
+    
