@@ -1278,7 +1278,7 @@ function RecordPaymentDialog({ customer, run, user }: { customer: RunCustomer | 
     )
 }
 
-function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: SalesRun, user: User, onReturn: () => void, remainingItems: OrderItem[] }) {
+function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: SalesRun, user: User | null, onReturn: () => void, remainingItems: OrderItem[] }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [itemsToReturn, setItemsToReturn] = useState<Record<string, number | string>>({});
@@ -1287,7 +1287,7 @@ function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: Sales
     const [staffList, setStaffList] = useState<StaffMember[]>([]);
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && user) {
             getStaffList().then(list => {
                 const isDeliveryStaff = user.role === 'Delivery Staff';
                 const isShowroomStaff = user.role === 'Showroom Staff';
@@ -1306,7 +1306,7 @@ function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: Sales
             setItemsToReturn({});
             setReturnTo('');
         }
-    }, [isOpen, user.role, user.staff_id]);
+    }, [isOpen, user]);
 
     const handleQuantityChange = (productId: string, value: string, maxStock: number) => {
         const numValue = Number(value);
@@ -1324,6 +1324,7 @@ function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: Sales
     };
     
     const handleSubmit = async () => {
+        if (!user) return;
         const items = Object.entries(itemsToReturn)
             .map(([id, quantity]) => {
                 const stockItem = remainingItems.find(p => p.productId === id);
@@ -1836,7 +1837,7 @@ function SalesRunDetailsPageClientContent() {
                         <LogCustomSaleDialog run={run} user={user} onSaleMade={handleSaleMade} remainingItems={remainingItems} />
                         <LogExpenseDialog run={run} user={user} />
                         <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} />
-                        {canReturnStock && <ReturnStockDialog user={user} onReturn={fetchRunData} remainingItems={remainingItems} />}
+                        {canReturnStock && <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} />}
                     </CardContent>
                     {canPerformActions && (
                         <CardFooter className="flex-col gap-2">
@@ -2120,5 +2121,3 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
-
-    
