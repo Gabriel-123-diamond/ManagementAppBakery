@@ -2,7 +2,7 @@
 
 "use server";
 
-import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc, getFirestore } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfYear, eachDayOfInterval, format, subDays, endOfHour, startOfHour, startOfYear as dateFnsStartOfYear, endOfYear as dateFnsEndOfYear } from "date-fns";
 import { db } from "@/lib/firebase";
 import { randomUUID } from 'crypto';
@@ -1491,10 +1491,8 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             transaction.update(confirmationRef, { status: newStatus });
 
             if (action === 'approve') {
-                // If it was a sale, now we finalize it by creating a sales record and updating order
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    // Use a server timestamp for the sales record date
-                    const salesDate = confirmationData.date ? new Date(confirmationData.date) : new Date();
+                    const salesDate = new Date(confirmationData.date); // Use the confirmation date for the sales record
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
@@ -1516,20 +1514,17 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         initialData[paymentMethodKey] = amount;
                         transaction.set(salesDocRef, initialData);
                     }
-                    // Update original order to completed
                     if(confirmationData.orderId) {
                         const orderRef = doc(db, 'orders', confirmationData.orderId);
                         transaction.update(orderRef, { status: 'Completed' });
                     }
                 }
                 
-                // If it was a debt payment
                 if (confirmationData.isDebtPayment && confirmationData.customerId) {
                     const customerRef = doc(db, 'customers', confirmationData.customerId);
                     transaction.update(customerRef, { amountPaid: increment(confirmationData.amount) });
                 } 
                 
-                // If it was an expense
                 else if (confirmationData.isExpense) {
                     const expenseData = {
                         category: confirmationData.expenseDetails?.category || 'Run Expense',
@@ -1541,7 +1536,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                     const newIndirectCostRef = doc(collection(db, "indirectCosts"));
                     transaction.set(newIndirectCostRef, expenseData);
                 }
-                 // Update run's totalCollected regardless of type (except for expenses which are handled differently)
+                 
                 if (!confirmationData.isExpense && confirmationData.runId) {
                      const isPosSale = confirmationData.runId.startsWith('pos-sale-');
                      if (!isPosSale) {
@@ -1550,14 +1545,12 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                      }
                 }
             } else if (action === 'decline') {
-                // If a sale is declined, reverse the stock deduction
                 if (!confirmationData.isExpense && confirmationData.items?.length > 0) {
                     for (const item of confirmationData.items) {
                         const staffStockRef = doc(db, 'staff', confirmationData.driverId, 'personal_stock', item.productId);
                         transaction.update(staffStockRef, { stock: increment(item.quantity) });
                     }
                 }
-                // Also mark the original order as cancelled
                 if (confirmationData.orderId) {
                     const orderRef = doc(db, 'orders', confirmationData.orderId);
                     transaction.update(orderRef, { status: 'Cancelled' });
@@ -2475,7 +2468,6 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
                 salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
             }
 
-            // Only count completed orders towards sales totals
             if (order.status === 'Completed') {
                 salesByCustomer[customerId].totalSold += order.total;
 
@@ -2536,24 +2528,23 @@ type SaleData = {
 }
 
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
-    const firestore = getFirestore();
     try {
-        const orderId = await runTransaction(firestore, async (transaction) => {
-            const staffDoc = await transaction.get(doc(firestore, 'staff', data.staffId));
+        const orderId = await runTransaction(db, async (transaction) => {
+            const staffDoc = await transaction.get(doc(db, 'staff', data.staffId));
             if (!staffDoc.exists()) throw new Error("Operating staff not found.");
 
-            const runRef = doc(firestore, 'transfers', data.runId);
+            const runRef = doc(db, 'transfers', data.runId);
             const runDoc = await transaction.get(runRef);
             if (!runDoc.exists()) throw new Error("Sales run not found.");
 
             let customerRef = null;
             if (data.customerId !== 'walk-in') {
-                customerRef = doc(firestore, 'customers', data.customerId);
+                customerRef = doc(db, 'customers', data.customerId);
                 const customerDoc = await transaction.get(customerRef);
                 if (!customerDoc.exists()) throw new Error("Customer not found.");
             }
             
-            const stockRefs = data.items.map(item => doc(firestore, 'staff', data.staffId, 'personal_stock', item.productId));
+            const stockRefs = data.items.map(item => doc(db, 'staff', data.staffId, 'personal_stock', item.productId));
             const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
 
             for (let i = 0; i < data.items.length; i++) {
@@ -2567,7 +2558,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             const driverName = staffDoc.data()?.name || 'Unknown';
             const isCreditSale = data.paymentMethod === 'Credit';
             
-            const newOrderRef = doc(collection(firestore, 'orders'));
+            const newOrderRef = doc(collection(db, 'orders'));
             transaction.set(newOrderRef, {
                 salesRunId: data.runId,
                 customerId: data.customerId,
@@ -2595,7 +2586,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     transaction.update(customerRef, { amountOwed: increment(data.total) });
                 }
             } else {
-                const confirmationRef = doc(collection(firestore, 'payment_confirmations'));
+                const confirmationRef = doc(collection(db, 'payment_confirmations'));
                 transaction.set(confirmationRef, {
                     runId: data.runId,
                     orderId: newOrderRef.id,
@@ -3087,7 +3078,7 @@ export async function declineStockIncrease(requestId: string, user: { staff_id: 
     }
 }
 
-export async function handleReturnStock(runId: string, unsoldItems: { productId: string; productName: string; quantity: number }[], user: { staff_id: string; name: string }, returnToStaffId: string): Promise<{success: boolean, error?: string}> {
+export async function handleReturnStock(runId: string, unsoldItems: { productId: string; productName: string; quantity: number }[], user: { staff_id: string; name: string; role: string; }, returnToStaffId: string): Promise<{success: boolean, error?: string}> {
     if (!user?.staff_id) {
         return { success: false, error: "User not found." };
     }
@@ -3151,7 +3142,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
             const ordersSnapshot = await getDocs(ordersQuery);
 
-            const salesDate = runData.date instanceof Timestamp ? runData.date.toDate() : new Date(runData.date);
+            const salesDate = runData.date.toDate();
             const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
