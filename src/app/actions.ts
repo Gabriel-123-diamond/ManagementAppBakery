@@ -2,7 +2,7 @@
 
 "use server";
 
-import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc, getFirestore } from "firebase/firestore";
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfYear, eachDayOfInterval, format, subDays, endOfHour, startOfHour, startOfYear as dateFnsStartOfYear, endOfYear as dateFnsEndOfYear } from "date-fns";
 import { db } from "@/lib/firebase";
 import { randomUUID } from 'crypto';
@@ -1494,7 +1494,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                 // If it was a sale, now we finalize it by creating a sales record and updating order
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
                     // Use a server timestamp for the sales record date
-                    const salesDate = new Date();
+                    const salesDate = confirmationData.date ? new Date(confirmationData.date) : new Date();
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
@@ -2460,47 +2460,47 @@ export async function checkForMissingIndexes(): Promise<{ requiredIndexes: strin
 }
 
 export async function getCustomersForRun(runId: string): Promise<any[]> {
-  try {
-    const ordersQuery = query(collection(db, "orders"), where("salesRunId", "==", runId));
-    const ordersSnapshot = await getDocs(ordersQuery);
+    try {
+        const ordersQuery = query(collection(db, "orders"), where("salesRunId", "==", runId));
+        const ordersSnapshot = await getDocs(ordersQuery);
 
-    const salesByCustomer: Record<string, { customerId: string, customerName: string, totalSold: number, totalPaid: number }> = {};
+        const salesByCustomer: Record<string, { customerId: string, customerName: string, totalSold: number, totalPaid: number }> = {};
 
-    ordersSnapshot.docs.forEach(docSnap => {
-      const order = docSnap.data();
-      const customerId = order.customerId || 'walk-in';
-      const customerName = order.customerName || 'Walk-in';
-      
-      if (!salesByCustomer[customerId]) {
-        salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
-      }
-      
-      // Only count completed orders towards sales totals
-      if (order.status === 'Completed') {
-          salesByCustomer[customerId].totalSold += order.total;
-          
-          if (order.paymentMethod !== 'Credit') {
-            salesByCustomer[customerId].totalPaid += order.total;
-          }
-      }
-    });
+        ordersSnapshot.docs.forEach(docSnap => {
+            const order = docSnap.data();
+            const customerId = order.customerId || 'walk-in';
+            const customerName = order.customerName || 'Walk-in';
 
-    // Add approved debt payments to the totalPaid for the corresponding customer
-    const paymentsQuery = query(collection(db, 'payment_confirmations'), where('runId', '==', runId), where('status', '==', 'approved'), where('isDebtPayment', '==', true));
-    const paymentsSnapshot = await getDocs(paymentsQuery);
-    paymentsSnapshot.forEach(confDoc => {
-        const conf = confDoc.data();
-        if (conf.customerId && salesByCustomer[conf.customerId]) {
-            salesByCustomer[conf.customerId].totalPaid += conf.amount;
-        }
-    });
-    
-    return Object.values(salesByCustomer);
-  } catch (error) {
-    console.error("Error fetching customers for run:", error);
-    return [];
-  }
+            if (!salesByCustomer[customerId]) {
+                salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
+            }
+
+            // Only count completed orders towards sales totals
+            if (order.status === 'Completed') {
+                salesByCustomer[customerId].totalSold += order.total;
+
+                if (order.paymentMethod !== 'Credit') {
+                    salesByCustomer[customerId].totalPaid += order.total;
+                }
+            }
+        });
+
+        const paymentsQuery = query(collection(db, 'payment_confirmations'), where('runId', '==', runId), where('status', '==', 'approved'), where('isDebtPayment', '==', true));
+        const paymentsSnapshot = await getDocs(paymentsQuery);
+        paymentsSnapshot.forEach(confDoc => {
+            const conf = confDoc.data();
+            if (conf.customerId && salesByCustomer[conf.customerId]) {
+                salesByCustomer[conf.customerId].totalPaid += conf.amount;
+            }
+        });
+
+        return Object.values(salesByCustomer);
+    } catch (error) {
+        console.error("Error fetching customers for run:", error);
+        return [];
+    }
 }
+
 
 export async function getOrdersForRun(runId: string): Promise<any[]> {
     try {
@@ -2536,23 +2536,24 @@ type SaleData = {
 }
 
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
+    const firestore = getFirestore();
     try {
-        const orderId = await runTransaction(db, async (transaction) => {
-            const staffDoc = await transaction.get(doc(db, 'staff', data.staffId));
+        const orderId = await runTransaction(firestore, async (transaction) => {
+            const staffDoc = await transaction.get(doc(firestore, 'staff', data.staffId));
             if (!staffDoc.exists()) throw new Error("Operating staff not found.");
 
-            const runRef = doc(db, 'transfers', data.runId);
+            const runRef = doc(firestore, 'transfers', data.runId);
             const runDoc = await transaction.get(runRef);
             if (!runDoc.exists()) throw new Error("Sales run not found.");
 
             let customerRef = null;
             if (data.customerId !== 'walk-in') {
-                customerRef = doc(db, 'customers', data.customerId);
+                customerRef = doc(firestore, 'customers', data.customerId);
                 const customerDoc = await transaction.get(customerRef);
                 if (!customerDoc.exists()) throw new Error("Customer not found.");
             }
             
-            const stockRefs = data.items.map(item => doc(db, 'staff', data.staffId, 'personal_stock', item.productId));
+            const stockRefs = data.items.map(item => doc(firestore, 'staff', data.staffId, 'personal_stock', item.productId));
             const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
 
             for (let i = 0; i < data.items.length; i++) {
@@ -2566,7 +2567,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             const driverName = staffDoc.data()?.name || 'Unknown';
             const isCreditSale = data.paymentMethod === 'Credit';
             
-            const newOrderRef = doc(collection(db, 'orders'));
+            const newOrderRef = doc(collection(firestore, 'orders'));
             transaction.set(newOrderRef, {
                 salesRunId: data.runId,
                 customerId: data.customerId,
@@ -2594,7 +2595,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     transaction.update(customerRef, { amountOwed: increment(data.total) });
                 }
             } else {
-                const confirmationRef = doc(collection(db, 'payment_confirmations'));
+                const confirmationRef = doc(collection(firestore, 'payment_confirmations'));
                 transaction.set(confirmationRef, {
                     runId: data.runId,
                     orderId: newOrderRef.id,
@@ -3150,7 +3151,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
             const ordersSnapshot = await getDocs(ordersQuery);
 
-            const salesDate = (runData.date as Timestamp).toDate();
+            const salesDate = runData.date instanceof Timestamp ? runData.date.toDate() : new Date(runData.date);
             const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
