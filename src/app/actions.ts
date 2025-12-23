@@ -1508,7 +1508,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         const initialData: Record<string, any> = {
                             date: Timestamp.fromDate(startOfDay(salesDate)),
                             description: `Daily Sales for ${salesDocId}`,
-                            cash: 0, pos: 0, creditSales: 0, shortage: 0,
+                            cash: 0, pos: 0, creditSales: 0, shortage: 0, transfer: 0,
                             total: amount,
                         };
                         initialData[paymentMethodKey] = amount;
@@ -2467,10 +2467,9 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
             if (!salesByCustomer[customerId]) {
                 salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
             }
-
+            
             if (order.status === 'Completed') {
                 salesByCustomer[customerId].totalSold += order.total;
-
                 if (order.paymentMethod !== 'Credit') {
                     salesByCustomer[customerId].totalPaid += order.total;
                 }
@@ -2530,11 +2529,15 @@ type SaleData = {
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-            const staffDoc = await transaction.get(doc(db, 'staff', data.staffId));
-            if (!staffDoc.exists()) throw new Error("Operating staff not found.");
-
+            const staffDocRef = doc(db, 'staff', data.staffId);
             const runRef = doc(db, 'transfers', data.runId);
-            const runDoc = await transaction.get(runRef);
+
+            const [staffDoc, runDoc] = await Promise.all([
+                transaction.get(staffDocRef),
+                transaction.get(runRef),
+            ]);
+
+            if (!staffDoc.exists()) throw new Error("Operating staff not found.");
             if (!runDoc.exists()) throw new Error("Sales run not found.");
 
             let customerRef = null;
@@ -2544,16 +2547,16 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 if (!customerDoc.exists()) throw new Error("Customer not found.");
             }
             
-            const stockRefs = data.items.map(item => doc(db, 'staff', data.staffId, 'personal_stock', item.productId));
-            const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
-
-            for (let i = 0; i < data.items.length; i++) {
-                const item = data.items[i];
-                const stockDoc = stockDocs[i];
+            const stockChecks = data.items.map(async (item) => {
+                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
+                const stockDoc = await transaction.get(stockRef);
                 if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
                     throw new Error(`Not enough stock for ${item.name}.`);
                 }
-            }
+                return { stockRef, item };
+            });
+
+            await Promise.all(stockChecks);
 
             const driverName = staffDoc.data()?.name || 'Unknown';
             const isCreditSale = data.paymentMethod === 'Credit';
@@ -2575,9 +2578,8 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 isDebtPayment: false,
             });
 
-            for (let i = 0; i < data.items.length; i++) {
-                const item = data.items[i];
-                const stockRef = stockDocs[i];
+            const stockUpdates = await Promise.all(stockChecks);
+            for (const { stockRef, item } of stockUpdates) {
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
@@ -2626,11 +2628,11 @@ type PosSaleData = {
     date: string; // ISO String
 }
 export async function handlePosSale(data: PosSaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
-    const newOrderRef = doc(collection(db, 'orders'));
-    const orderDate = new Date(data.date);
-
     try {
-        await runTransaction(db, async (transaction) => {
+        const orderId = await runTransaction(db, async (transaction) => {
+            const newOrderRef = doc(collection(db, 'orders'));
+            const orderDate = new Date(data.date);
+
             const stockChecks = data.items.map(async item => {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
@@ -2659,7 +2661,8 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             
             transaction.set(newOrderRef, orderData);
             
-            for (const { stockRef, item } of await Promise.all(stockChecks)) {
+            const stockUpdates = await Promise.all(stockChecks);
+            for (const { stockRef, item } of stockUpdates) {
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
@@ -2678,9 +2681,10 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 paymentMethod: data.paymentMethod,
                 isDebtPayment: false,
             });
+            return newOrderRef.id;
         });
 
-        return { success: true, orderId: newOrderRef.id };
+        return { success: true, orderId };
     } catch (error) {
         console.error("Error processing POS sale:", error);
         return { success: false, error: (error as Error).message };
@@ -2760,35 +2764,38 @@ export async function getProducts(): Promise<any[]> {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 export async function getProductsForStaff(staffId: string): Promise<{productId: string, name: string, stock: number, price: number, costPrice: number, minPrice: number, maxPrice: number}[]> {
-    const personalStockQuery = query(collection(db, 'staff', staffId, 'personal_stock'));
-    const stockSnapshot = await getDocs(personalStockQuery);
-    
-    if (stockSnapshot.empty) return [];
+    try {
+        const personalStockQuery = query(collection(db, 'staff', staffId, 'personal_stock'));
+        const stockSnapshot = await getDocs(personalStockQuery);
+        
+        if (stockSnapshot.empty) return [];
 
-    const productPromises = stockSnapshot.docs.map(stockDoc => {
-        const productId = stockDoc.id; // The document ID is the product ID
-        return getDoc(doc(db, 'products', productId));
-    });
+        const productIds = stockSnapshot.docs.map(doc => doc.id);
+        const productsQuery = query(collection(db, 'products'), where('__name__', 'in', productIds));
+        const productSnapshots = await getDocs(productsQuery);
+        const productMap = new Map(productSnapshots.docs.map(doc => [doc.id, doc.data()]));
+        
+        return stockSnapshot.docs.map((stockDoc) => {
+            const productData = productMap.get(stockDoc.id);
+            if (!productData) {
+                 console.warn(`Product with ID ${stockDoc.id} not found for staff ${staffId}'s personal stock item.`);
+                 return null;
+            }
+            return {
+                productId: stockDoc.id,
+                name: stockDoc.data().productName,
+                stock: stockDoc.data().stock,
+                price: productData.price || 0,
+                costPrice: productData.costPrice || 0,
+                minPrice: productData.minPrice || 0,
+                maxPrice: productData.maxPrice || 0,
+            };
+        }).filter((p): p is {productId: string, name: string, stock: number, price: number, costPrice: number, minPrice: number, maxPrice: number} => p !== null);
 
-    const productSnapshots = await Promise.all(productPromises);
-    
-    return stockSnapshot.docs.map((stockDoc, index) => {
-        const productDoc = productSnapshots[index];
-        if (!productDoc || !productDoc.exists()) {
-             console.warn(`Product with ID ${stockDoc.id} not found for staff ${staffId}'s personal stock item.`);
-             return null;
-        }
-        const productData = productDoc.data();
-        return {
-            productId: stockDoc.id,
-            name: stockDoc.data().productName,
-            stock: stockDoc.data().stock,
-            price: productData.price || 0,
-            costPrice: productData.costPrice || 0,
-            minPrice: productData.minPrice || 0,
-            maxPrice: productData.maxPrice || 0,
-        };
-    }).filter((p): p is {productId: string, name: string, stock: number, price: number, costPrice: number, minPrice: number, maxPrice: number} => p !== null);
+    } catch (error) {
+        console.error("Error in getProductsForStaff:", error);
+        return [];
+    }
 }
 export async function getIngredients(): Promise<any[]> {
     const snapshot = await getDocs(collection(db, "ingredients"));
@@ -3142,7 +3149,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
             const ordersSnapshot = await getDocs(ordersQuery);
 
-            const salesDate = runData.date.toDate();
+            const salesDate = (runData.date as Timestamp).toDate();
             const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
@@ -3167,7 +3174,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
                      transaction.set(salesDocRef, {
                         date: Timestamp.fromDate(startOfDay(salesDate)),
                         description: `Daily Sales for ${salesDocId}`,
-                        cash: 0, pos: 0,
+                        cash: 0, pos: 0, transfer: 0, creditSales: 0,
                         total: 0,
                         shortage: shortage
                     });
@@ -3295,3 +3302,4 @@ export async function returnUnusedIngredients(
     
 
     
+
