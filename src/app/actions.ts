@@ -2532,10 +2532,8 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             const staffDocRef = doc(db, 'staff', data.staffId);
             const runRef = doc(db, 'transfers', data.runId);
 
-            const [staffDoc, runDoc] = await Promise.all([
-                transaction.get(staffDocRef),
-                transaction.get(runRef),
-            ]);
+            const staffDoc = await transaction.get(staffDocRef);
+            const runDoc = await transaction.get(runRef);
 
             if (!staffDoc.exists()) throw new Error("Operating staff not found.");
             if (!runDoc.exists()) throw new Error("Sales run not found.");
