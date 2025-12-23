@@ -1493,7 +1493,8 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (action === 'approve') {
                 // If it was a sale, now we finalize it by creating a sales record and updating order
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDate = confirmationData.date ? new Date(confirmationData.date) : new Date();
+                    // Use a server timestamp for the sales record date
+                    const salesDate = new Date();
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
@@ -2584,7 +2585,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
 
             for (let i = 0; i < data.items.length; i++) {
                 const item = data.items[i];
-                const stockRef = stockRefs[i];
+                const stockRef = stockDocs[i];
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
@@ -3149,7 +3150,8 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
             const ordersSnapshot = await getDocs(ordersQuery);
 
-            const salesDocId = format(runData.date.toDate(), 'yyyy-MM-dd');
+            const salesDate = (runData.date as Timestamp).toDate();
+            const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
 
@@ -3171,7 +3173,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
                     transaction.update(salesDocRef, { shortage: increment(shortage) });
                 } else {
                      transaction.set(salesDocRef, {
-                        date: runData.date,
+                        date: Timestamp.fromDate(startOfDay(salesDate)),
                         description: `Daily Sales for ${salesDocId}`,
                         cash: 0, pos: 0,
                         total: 0,
