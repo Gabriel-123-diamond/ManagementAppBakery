@@ -679,7 +679,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
 
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
-    const handleSubmit = async (partialPayments?: PartialPayment[]) => {
+    const handleSubmit = async (partialPayments?: Omit<PartialPayment, 'id' | 'confirmed'>[]) => {
         if (!user || cart.length === 0 || (paymentMethod === 'Credit' && selectedCustomerId === 'walk-in')) {
             toast({ variant: 'destructive', title: 'Error', description: 'Please add items to cart and select a registered customer for credit sales.' });
             return;
@@ -1257,7 +1257,7 @@ function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: Sales
     };
     
     const handleSubmit = async () => {
-        if (!user) return;
+        if (!user || !run) return;
         const items = Object.entries(itemsToReturn)
             .map(([id, quantity]) => {
                 const stockItem = remainingItems.find(p => p.productId === id);
@@ -1596,35 +1596,29 @@ function SalesRunDetailsPageClientContent() {
         return sortConfig.direction === 'asc' ? '▲' : '▼';
     };
     
-    const handleSaleMade = (newOrder: CompletedOrder) => {
-        // Now this does nothing, as we don't want to show a receipt immediately.
-    }
-    
-     const getRemainingItems = useCallback(() => {
+    const remainingItems = useMemo(() => {
         if (!run || !run.items) return [];
 
-        const soldQuantities: { [key: string]: number } = {};
-        if (Array.isArray(orders)) {
-            orders.forEach(order => {
-                if (Array.isArray(order.items)) {
-                    order.items.forEach(item => {
-                        soldQuantities[item.productId] = (soldQuantities[item.productId] || 0) + item.quantity;
-                    });
-                }
-            });
-        }
+        const deductedQuantities: { [key: string]: number } = {};
+        orders.forEach(order => {
+            if (Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    deductedQuantities[item.productId] = (deductedQuantities[item.productId] || 0) + item.quantity;
+                });
+            }
+        });
         
         return run.items.map(item => {
-            const soldQuantity = soldQuantities[item.productId] || 0;
-            const remainingQuantity = item.quantity - soldQuantity;
+            const soldQuantity = deductedQuantities[item.productId] || 0;
             return {
                 ...item,
                 price: item.price || 0,
                 name: item.productName,
-                quantity: remainingQuantity > 0 ? remainingQuantity : 0,
+                quantity: item.quantity - soldQuantity,
             };
         }).filter(item => item.quantity > 0);
     }, [run, orders]);
+    
 
     const { progressValue, progressDenominator } = useMemo(() => {
         if (!run) return { progressValue: 0, progressDenominator: 1 };
@@ -1644,8 +1638,6 @@ function SalesRunDetailsPageClientContent() {
 
     }, [run, orders, totalCollected]);
 
-
-    const remainingItems = useMemo(getRemainingItems, [getRemainingItems]);
     const productCategories = useMemo(() => ['All', ...new Set(allProducts.map(p => p.category))], [allProducts]);
     
     if (isLoading || !run || !user) {
@@ -1773,9 +1765,9 @@ function SalesRunDetailsPageClientContent() {
                         <CardDescription>Manage this sales run.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-grow grid grid-cols-2 gap-2">
-                        <SellToCustomerDialog run={run} user={user} onSaleMade={handleSaleMade} remainingItems={remainingItems}/>
+                        <SellToCustomerDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems}/>
                         <RecordPaymentDialog customer={null} run={run} user={user} />
-                        <LogCustomSaleDialog run={run} user={user} onSaleMade={handleSaleMade} remainingItems={remainingItems} />
+                        <LogCustomSaleDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} />
                         <LogExpenseDialog run={run} user={user} />
                         <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} />
                         {canReturnStock && <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} />}
@@ -1810,6 +1802,7 @@ function SalesRunDetailsPageClientContent() {
                                 <TableHead>Product</TableHead>
                                 <TableHead className="text-right">Initial Qty</TableHead>
                                 <TableHead className="text-right">Sold</TableHead>
+                                <TableHead className="text-right">Pending Sale</TableHead>
                                 <TableHead className="text-right">Returned (Pending)</TableHead>
                                 <TableHead className="text-right">Net Remaining</TableHead>
                                 {user?.role === 'Developer' && <TableHead className="text-right">Actions</TableHead>}
@@ -1817,15 +1810,17 @@ function SalesRunDetailsPageClientContent() {
                         </TableHeader>
                         <TableBody>
                             {run.items.map(item => {
-                                const soldQuantity = orders.flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
+                                const soldQty = orders.filter(o => o.status === 'Completed').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
+                                const pendingSaleQty = orders.filter(o => o.status === 'Pending').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
                                 const pendingReturnQty = pendingReturns.flatMap(pr => pr.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
-                                const netRemaining = item.quantity - soldQuantity - pendingReturnQty;
+                                const netRemaining = item.quantity - soldQty - pendingReturnQty - pendingSaleQty;
                                 const fullProduct = allProducts.find(p => p.id === item.productId);
                                 return (
                                     <TableRow key={item.productId}>
                                         <TableCell>{item.productName}</TableCell>
                                         <TableCell className="text-right">{item.quantity}</TableCell>
-                                        <TableCell className="text-right">{soldQuantity}</TableCell>
+                                        <TableCell className="text-right">{soldQty}</TableCell>
+                                        <TableCell className="text-right text-yellow-500">{pendingSaleQty}</TableCell>
                                         <TableCell className="text-right text-orange-500">{pendingReturnQty}</TableCell>
                                         <TableCell className="text-right font-bold">{netRemaining}</TableCell>
                                         {user?.role === 'Developer' && (
