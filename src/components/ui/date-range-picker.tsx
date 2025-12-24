@@ -19,24 +19,37 @@ import { useIsMobile } from "@/hooks/use-mobile"
 interface DateRangePickerProps extends React.HTMLAttributes<HTMLDivElement> {
   date: DateRange | undefined
   onDateChange: (date: DateRange | undefined) => void
+  align?: "start" | "center" | "end"
 }
 
 export function DateRangePicker({
   className,
   date,
   onDateChange,
+  align = "end",
 }: DateRangePickerProps) {
   const isMobile = useIsMobile()
+  const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
+  const [isOpen, setIsOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    setTempDate(date)
+  }, [date])
+
+  const handleApply = () => {
+    onDateChange(tempDate)
+    setIsOpen(false)
+  }
 
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date"
             variant={"outline"}
             className={cn(
-              "w-full sm:w-[300px] justify-start text-left font-normal",
+              "w-[260px] justify-start text-left font-normal",
               !date && "text-muted-foreground"
             )}
           >
@@ -51,19 +64,22 @@ export function DateRangePicker({
                 format(date.from, "LLL dd, y")
               )
             ) : (
-              <span>Pick a date</span>
+              <span>Pick a date range</span>
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto p-0" align={align}>
           <Calendar
             initialFocus
             mode="range"
-            defaultMonth={date?.from}
-            selected={date}
-            onSelect={onDateChange}
+            defaultMonth={tempDate?.from}
+            selected={tempDate}
+            onSelect={setTempDate}
             numberOfMonths={isMobile ? 1 : 2}
           />
+           <div className="p-2 border-t flex justify-end">
+                <Button onClick={handleApply}>Apply</Button>
+            </div>
         </PopoverContent>
       </Popover>
     </div>

@@ -25,7 +25,6 @@ import {
   Send,
   PlusCircle,
   Trash2,
-  Calendar as CalendarIcon,
   Package,
   ArrowRightLeft,
   Wrench,
@@ -50,8 +49,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+
 import { format, startOfDay, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
@@ -64,6 +62,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 type User = {
     name: string;
@@ -136,38 +135,6 @@ function PaginationControls({
         </div>
     )
 }
-
-function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
-    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
-    const [isOpen, setIsOpen] = useState(false);
-
-    useEffect(() => {
-        setTempDate(date);
-    }, [date]);
-
-    const handleApply = () => {
-        setDate(tempDate);
-        setIsOpen(false);
-    }
-
-    return (
-         <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal",!date && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date?.from ? ( date.to ? (<> {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")} </>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align={align}>
-                <Calendar initialFocus mode="range" defaultMonth={tempDate?.from} selected={tempDate} onSelect={setTempDate} numberOfMonths={2}/>
-                <div className="p-2 border-t flex justify-end">
-                    <Button onClick={handleApply}>Apply</Button>
-                </div>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
 
 function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch: ProductionBatch, user: User, allIngredients: Ingredient[], onApproval: () => void }) {
     const { toast } = useToast();
@@ -323,7 +290,7 @@ function AcceptRunDialog({ transfer, onAccept }: { transfer: Transfer, onAccept:
     )
 }
 
-function ReportWasteTab({ products, user, onWasteReported }: { products: Product[], user: User | null, onWasteReported: () => void }) {
+function ReportWasteTab({ products, user, onWasteReported }: { products: { productId: string; productName: string; stock: number }[], user: User | null, onWasteReported: () => void }) {
     const { toast } = useToast();
     const [productId, setProductId] = useState("");
     const [quantity, setQuantity] = useState<number | string>(1);
@@ -331,7 +298,7 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: Product
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const selectedProduct = useMemo(() => products.find(p => p.id === productId), [productId, products]);
+    const selectedProduct = useMemo(() => products.find(p => p.productId === productId), [productId, products]);
 
     const handleSubmit = async () => {
         if (!productId || !quantity || !reason || !user) {
@@ -350,10 +317,12 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: Product
         const productCategory = (await getDoc(doc(db, 'products', productId))).data()?.category || 'Unknown';
         
         const result = await handleReportWaste({
-            productId,
-            productName: selectedProduct?.name || 'Unknown Product',
-            productCategory,
-            quantity: Number(quantity),
+            items: [{
+              productId,
+              productName: selectedProduct?.productName || 'Unknown Product',
+              productCategory,
+              quantity: Number(quantity),
+            }],
             reason,
             notes
         }, user);
@@ -389,8 +358,8 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: Product
                             </SelectTrigger>
                             <SelectContent>
                                 {products.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                    {p.name} (Stock: {p.stock})
+                                <SelectItem key={p.productId} value={p.productId}>
+                                    {p.productName} (Stock: {p.stock})
                                 </SelectItem>
                                 ))}
                             </SelectContent>
@@ -832,7 +801,7 @@ export default function StockControlPage() {
                     </Card>
                 </div>
                 <div className="flex-1">
-                    <ReportWasteTab products={products} user={user} onWasteReported={fetchPageData} />
+                    <ReportWasteTab products={products.map(p => ({ productId: p.id, productName: p.name, stock: p.stock }))} user={user} onWasteReported={fetchPageData} />
                 </div>
             </div>
          </div>
@@ -1073,7 +1042,7 @@ export default function StockControlPage() {
                             <CardTitle>All Pending Transfers</CardTitle>
                             <CardDescription>A log of all transfers awaiting acknowledgement across the system.</CardDescription>
                         </div>
-                        <DateRangeFilter date={allPendingDate} setDate={setAllPendingDate}/>
+                        <DateRangePicker date={allPendingDate} onDateChange={setAllPendingDate}/>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -1123,7 +1092,7 @@ export default function StockControlPage() {
                     <CardTitle>My Initiated Transfers Log</CardTitle>
                     <CardDescription>A log of transfers you have initiated.</CardDescription>
                 </div>
-                <DateRangeFilter date={date} setDate={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} />
             </div>
         </CardHeader>
         <CardContent>
@@ -1169,4 +1138,3 @@ export default function StockControlPage() {
     </div>
   );
 }
-
