@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -608,7 +607,7 @@ export type SalesRun = {
     from_staff_name?: string; 
     from_staff_id?: string;
     to_staff_name?: string;
-    to_staff_id?: string;
+    to_staff_id: string;
     totalRevenue: number;
     totalCollected: number;
     totalOutstanding: number;
@@ -1457,11 +1456,11 @@ export async function handleAddExpense(expenseData: Omit<Expense, 'id' | 'date'>
 
 export type PaymentConfirmation = {
   id: string;
-  date: string; // Changed to string
+  date: string;
   driverId: string;
   driverName: string;
   runId: string;
-  orderId?: string; // Link to the specific order
+  orderId?: string;
   amount: number;
   status: 'pending' | 'approved' | 'declined';
   customerName?: string;
@@ -1471,6 +1470,7 @@ export type PaymentConfirmation = {
   paymentMethod: 'Cash' | 'POS' | 'Paystack' | 'Custom';
   isExpense?: boolean;
   expenseDetails?: { category: string; description: string; };
+  approvedAt?: Timestamp;
 };
 
 
@@ -1487,7 +1487,7 @@ export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> 
         return { 
             id: docSnap.id,
              ...data,
-            date: date.toDate().toISOString(), // Convert to string
+            date: date.toDate().toISOString(),
         } as PaymentConfirmation
     });
   } catch (error) {
@@ -1510,9 +1510,11 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             const newStatus = action === 'approve' ? 'approved' : 'declined';
             
             if (action === 'approve') {
+                const approvalTimestamp = serverTimestamp();
+                
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDate = new Date(confirmationData.date); // Use the confirmation date for the sales record
-                    if (isNaN(salesDate.getTime())) { // Check for invalid date
+                    const salesDate = new Date(confirmationData.date);
+                    if (isNaN(salesDate.getTime())) { 
                         throw new Error("Invalid date found in payment confirmation record.");
                     }
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
@@ -1552,7 +1554,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         category: confirmationData.expenseDetails?.category || 'Run Expense',
                         description: confirmationData.expenseDetails?.description || `Expense for run ${confirmationData.runId}`,
                         amount: confirmationData.amount,
-                        date: serverTimestamp(),
+                        date: approvalTimestamp,
                         details: [{ name: confirmationData.driverName, amount: confirmationData.amount }]
                     };
                     const newIndirectCostRef = doc(collection(db, "indirectCosts"));
@@ -1566,6 +1568,8 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         transaction.update(runRef, { totalCollected: increment(confirmationData.amount) });
                      }
                 }
+                 transaction.update(confirmationRef, { status: newStatus, approvedAt: approvalTimestamp });
+
             } else if (action === 'decline') {
                 if (!confirmationData.isExpense && confirmationData.items?.length > 0) {
                     for (const item of confirmationData.items) {
@@ -1577,8 +1581,8 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                     const orderRef = doc(db, 'orders', confirmationData.orderId);
                     transaction.update(orderRef, { status: 'Cancelled' });
                 }
+                 transaction.update(confirmationRef, { status: newStatus });
             }
-             transaction.update(confirmationRef, { status: newStatus });
         });
         return { success: true };
     } catch (error) {
@@ -2481,7 +2485,7 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
 
         ordersSnapshot.docs.forEach(docSnap => {
             const order = docSnap.data();
-            if (order.status !== 'Completed') return; // Only count completed orders toward totals
+            if (order.status !== 'Completed') return;
 
             const customerId = order.customerId || 'walk-in';
             const customerName = order.customerName || 'Walk-in';
@@ -2670,7 +2674,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 total: data.total,
                 paymentMethod: data.paymentMethod,
                 partialPayments: data.partialPayments || null,
-                date: Timestamp.fromDate(orderDate),
+                date: serverTimestamp(),
                 staffId: data.staffId,
                 staffName: data.staffName,
                 status: 'Pending',
@@ -3160,7 +3164,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
             const ordersSnapshot = await getDocs(ordersQuery);
 
-            const salesDate = new Date((runData.date as Timestamp).toDate()); // Use the run's date for sales record
+            const salesDate = new Date(); // Use current date for sales record upon completion
             const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
@@ -3318,4 +3322,5 @@ export async function returnUnusedIngredients(
 
 
     
+
 

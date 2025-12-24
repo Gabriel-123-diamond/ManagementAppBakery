@@ -11,8 +11,8 @@ import { format, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startO
 import { getFinancialSummary, getDebtRecords, getDirectCosts, getIndirectCosts, getClosingStocks, getWages, addDirectCost, addIndirectCost, getSales, getDrinkSalesSummary, PaymentConfirmation, getPaymentConfirmations, getCreditors, getDebtors, Creditor, Debtor, handleLogPayment, getWasteLogs, WasteLog, getDiscountRecords, getProfitAndLossStatement, ProfitAndLossStatement, getAccountSummary, SupplyRequest, getPendingSupplyRequests, approveStockIncrease, declineStockIncrease, handlePaymentConfirmation } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -1297,7 +1297,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                     <TableCell>{format(new Date(c.date), 'Pp')}</TableCell>
                                     <TableCell>{c.driverName}</TableCell>
                                     <TableCell>{formatCurrency(c.amount)}</TableCell>
-                                    <TableCell><Badge variant="outline">{c.paymentMethod}</Badge></TableCell>
+                                    <TableCell><Badge variant="outline">{c.paymentMethod}</TableCell>
                                     <TableCell><Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge></TableCell>
                                 </TableRow>
                                 ))
@@ -2311,8 +2311,7 @@ function ApprovalsTab({ user, notificationBadge, isReadOnly }: { user: { staff_i
                                         <div className="flex gap-2 justify-end">
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="sm" disabled={!!actioningId || isReadOnly}>Decline</Button>
-                                                </AlertDialogTrigger>
+                                                    <Button variant="destructive" size="sm" disabled={!!actioningId || isReadOnly}>Decline</Button></AlertDialogTrigger>
                                                 <AlertDialogContent>
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -2320,8 +2319,7 @@ function ApprovalsTab({ user, notificationBadge, isReadOnly }: { user: { staff_i
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDecline(req.id)}>Decline</AlertDialogAction>
-                                                    </AlertDialogFooter>
+                                                        <AlertDialogAction onClick={() => handleDecline(req.id)}>Decline</AlertDialogAction></AlertDialogFooter>
                                                 </AlertDialogContent>
                                             </AlertDialog>
                                             <Button size="sm" onClick={() => setSelectedRequest(req)} disabled={isReadOnly}>Approve</Button>
@@ -2512,3 +2510,4 @@ export default function AccountingPage() {
     </div>
   );
 }
+
