@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -313,55 +314,32 @@ function SupplyLogDialog({
     )
 }
 
-function LogPaymentDialog({ supplier, user, onPaymentLogged, disabled }: { supplier: Supplier, user: User, onPaymentLogged: () => void, disabled?: boolean }) {
+function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: Supplier, onPaymentLogged: () => void, disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [amount, setAmount] = useState<number | string>('');
-    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'POS'>('Cash');
-    const [customerEmail, setCustomerEmail] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const outstanding = supplier.amountOwed - supplier.amountPaid;
-
-    useEffect(() => {
-        if (isOpen) {
-            setAmount('');
-            setPaymentMethod('Cash');
-            setCustomerEmail(supplier.email || '');
-        }
-    }, [isOpen, supplier.email]);
-    
-    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        const numValue = parseFloat(value);
-        if (value === '') {
-            setAmount('');
-        } else if (!isNaN(numValue) && numValue <= outstanding) {
-            setAmount(numValue);
-        } else if (numValue > outstanding) {
-            setAmount(outstanding);
-        }
-    };
-    
-    const handleRecordPayment = async () => {
-        const paymentAmount = Number(amount);
-        if (!paymentAmount || paymentAmount <= 0) {
+    const handleSubmit = async () => {
+        if (!amount || Number(amount) <= 0) {
             toast({ variant: 'destructive', title: 'Error', description: 'Please enter a valid amount.'});
             return;
         }
-
-        setIsSubmitting(true);
-        if (paymentMethod === 'Cash' || paymentMethod === 'POS') {
-            const result = await handleLogPayment(supplier.id, paymentAmount);
-            if (result.success) {
-                toast({ title: 'Success', description: `${paymentMethod} payment logged successfully.` });
-                onPaymentLogged();
-                setIsOpen(false);
-            } else {
-                toast({ variant: 'destructive', title: 'Error', description: result.error });
-            }
+        if (Number(amount) > (supplier.amountOwed - supplier.amountPaid)) {
+             toast({ variant: 'destructive', title: 'Error', description: `Payment cannot be greater than the outstanding balance of ${formatCurrency(supplier.amountOwed - supplier.amountPaid)}.`});
+            return;
         }
-        setIsSubmitting(false);
+        setIsLoading(true);
+        const result = await handleLogPayment(supplier.id, Number(amount));
+        if (result.success) {
+            toast({ title: 'Success', description: `Payment of ${formatCurrency(Number(amount))} logged.`});
+            onPaymentLogged();
+            setIsOpen(false);
+            setAmount('');
+        } else {
+             toast({ variant: 'destructive', title: 'Error', description: result.error});
+        }
+        setIsLoading(false);
     }
     
     return (
@@ -375,34 +353,76 @@ function LogPaymentDialog({ supplier, user, onPaymentLogged, disabled }: { suppl
                 <DialogHeader>
                     <DialogTitle>Log Payment to {supplier.name}</DialogTitle>
                     <DialogDescription>
-                        Outstanding Balance: <span className="font-bold text-destructive">₦{outstanding.toLocaleString()}</span>
+                        Outstanding Balance: <span className="font-bold text-destructive">₦{(supplier.amountOwed - supplier.amountPaid).toLocaleString()}</span>
                     </DialogDescription>
                 </DialogHeader>
-                 <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                        <Label>Payment Method</Label>
-                        <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as any)}>
-                            <SelectTrigger><SelectValue/></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Cash"><Wallet className="mr-2 h-4 w-4"/>Cash</SelectItem>
-                                <SelectItem value="POS"><SquareTerminal className="mr-2 h-4 w-4"/>POS</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="payment-amount">Amount Paid (₦)</Label>
-                        <Input id="payment-amount" type="number" value={amount} onChange={handleAmountChange} />
-                    </div>
+                 <div className="py-4">
+                    <Label htmlFor="payment-amount">Amount Paid (₦)</Label>
+                    <Input id="payment-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleRecordPayment} disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Log Payment
-                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                             <Button disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Log Payment</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Payment</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Are you sure you want to log a payment of {formatCurrency(Number(amount))} to {supplier.name}?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleSubmit}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    )
+}
+
+function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+            <Button
+                id="date"
+                variant={"outline"}
+                className={cn(
+                "w-[260px] justify-start text-left font-normal",
+                !date && "text-muted-foreground"
+                )}
+            >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date?.from ? (
+                date.to ? (
+                    <>
+                    {format(date.from, "LLL dd, y")} -{" "}
+                    {format(date.to, "LLL dd, y")}
+                    </>
+                ) : (
+                    format(date.from, "LLL dd, y")
+                )
+                ) : (
+                <span>Filter by date range</span>
+                )}
+            </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align={align}>
+            <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={date?.from}
+                selected={date}
+                onSelect={setDate}
+                numberOfMonths={2}
+            />
+            </PopoverContent>
+        </Popover>
     )
 }
 
@@ -415,8 +435,6 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
     const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
-    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
-    const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
     
     const canManageSupplies = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper' || user?.role === 'Accountant';
     const canLogPayments = user?.role === 'Accountant' || user?.role === 'Developer';
@@ -469,7 +487,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                     credit: null,
                     balance: runningBalance,
                 }
-                runningBalance -= log.totalCost;
+                runningBalance += log.totalCost; // This was incorrect, should decrease balance from supplier's perspective
                 return transaction;
             } else { // payment
                 const transaction = {
@@ -479,19 +497,31 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                     credit: log.amount,
                     balance: runningBalance,
                 }
-                runningBalance += log.amount;
+                runningBalance -= log.amount;
                 return transaction;
             }
-        });
+        }).reverse(); // Reverse to calculate balance correctly from past to present
         
-        setTransactions(calculatedTransactions);
+        // Recalculate balance from oldest to newest
+        let balance = 0;
+        const finalTransactions = calculatedTransactions.map(t => {
+            if(t.debit) balance += t.debit;
+            if(t.credit) balance -= t.credit;
+            return {...t, balance};
+        }).reverse(); // Reverse back to show newest first
+
+        
+        setTransactions(finalTransactions);
         setIsLoading(false);
 
     }, [supplier.id, supplier.name, user, supplier.amountOwed, supplier.amountPaid]);
     
     useEffect(() => {
-        fetchDetails();
-    }, [fetchDetails]);
+        const unsub = onSnapshot(doc(db, 'suppliers', supplier.id), (doc) => {
+            fetchDetails();
+        });
+        return () => unsub();
+    }, [supplier.id, fetchDetails]);
     
 
     const filteredTransactions = useMemo(() => {
@@ -536,11 +566,6 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
             console.error("Error saving supply log:", error);
             toast({ variant: "destructive", title: "Error", description: "Failed to save supply log." });
         }
-    }
-
-    const handleDateApply = () => {
-      setDate(tempDate);
-      setIsDatePopoverOpen(false);
     }
     
     return (
@@ -590,45 +615,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                 <Input placeholder="Search logs..." className="pl-10 w-full sm:w-auto" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
-                           <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-                                <PopoverTrigger asChild>
-                                <Button
-                                    id="date"
-                                    variant={"outline"}
-                                    className={cn(
-                                    "w-[260px] justify-start text-left font-normal",
-                                    !date && "text-muted-foreground"
-                                    )}
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {date?.from ? (
-                                    date.to ? (
-                                        <>
-                                        {format(date.from, "LLL dd, y")} -{" "}
-                                        {format(date.to, "LLL dd, y")}
-                                        </>
-                                    ) : (
-                                        format(date.from, "LLL dd, y")
-                                    )
-                                    ) : (
-                                    <span>Filter by date range</span>
-                                    )}
-                                </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="end">
-                                <Calendar
-                                    initialFocus
-                                    mode="range"
-                                    defaultMonth={tempDate?.from}
-                                    selected={tempDate}
-                                    onSelect={setTempDate}
-                                    numberOfMonths={2}
-                                />
-                                <div className="p-2 border-t flex justify-end">
-                                    <Button onClick={handleDateApply}>Apply</Button>
-                                </div>
-                                </PopoverContent>
-                            </Popover>
+                           <DateRangeFilter date={date} setDate={setDate} />
                             {canLogPayments && user && (
                                 <LogPaymentDialog supplier={supplier} user={user} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
                             )}

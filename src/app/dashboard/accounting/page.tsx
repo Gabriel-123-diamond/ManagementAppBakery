@@ -405,8 +405,24 @@ function LogPaymentDialog({ creditor, onPaymentLogged, disabled }: { creditor: C
                     <Input id="payment-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 <DialogFooter>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                             <Button disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Log Payment</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Payment</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Are you sure you want to log a payment of {formatCurrency(Number(amount))} to {creditor.name}?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleSubmit}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                     <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Log Payment</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -1128,7 +1144,7 @@ function IndirectCostsTab({ categories, isReadOnly }: { categories: CostCategory
 // --- New Payments & Requests Tab ---
 function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { staff_id: string; name: string }, notificationBadge?: React.ReactNode, isReadOnly?: boolean }) {
     const { toast } = useToast();
-    const [confirmations, setConfirmations] = useState<(Omit<PaymentConfirmation, 'date'> & { date: string })[]>([]);
+    const [confirmations, setConfirmations] = useState<PaymentConfirmation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [actioningId, setActioningId] = useState<string | null>(null);
     const [visiblePendingRows, setVisiblePendingRows] = useState<number | 'all'>(10);
@@ -1137,7 +1153,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
     const fetchConfirmations = useCallback(() => {
         setIsLoading(true);
         getPaymentConfirmations().then(data => {
-            setConfirmations(data);
+            setConfirmations(data as PaymentConfirmation[]);
         }).catch(() => {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch payment confirmations.' });
         }).finally(() => {
@@ -1200,7 +1216,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                     <div>
                                         <p className="font-semibold">{formatCurrency(c.amount)}</p>
                                         <p className="text-sm text-muted-foreground">{c.driverName}</p>
-                                        <p className="text-xs text-muted-foreground">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
+                                        <p className="text-xs text-muted-foreground">{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</p>
                                     </div>
                                     <Badge variant="outline">{c.paymentMethod}</Badge>
                                 </div>
@@ -1229,7 +1245,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                         ) : (
                             paginatedPending.map(c => (
                             <TableRow key={c.id}>
-                                <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
+                                <TableCell>{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</TableCell>
                                 <TableCell>{c.driverName}</TableCell>
                                 <TableCell>{c.runId.substring(0, 8)}...</TableCell>
                                 <TableCell>{c.customerName}</TableCell>
@@ -1279,7 +1295,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                         </div>
                                         <Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</p>
                                 </Card>
                              ))
                         )}
@@ -1295,7 +1311,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                             ) : (
                                 paginatedResolved.map(c => (
                                 <TableRow key={c.id}>
-                                    <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
+                                    <TableCell>{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</TableCell>
                                     <TableCell>{c.driverName}</TableCell>
                                     <TableCell>{formatCurrency(c.amount)}</TableCell>
                                     <TableCell><Badge variant="outline">{c.paymentMethod}</Badge></TableCell>
@@ -2495,7 +2511,7 @@ export default function AccountingPage() {
                         {notificationCounts.approvals > 0 && <Badge variant="destructive" className="ml-2">{notificationCounts.approvals}</Badge>}
                     </TabsTrigger>
                     <TabsTrigger value="payment-requests" className="relative">
-                        Payment &amp; Expense Requests
+                        Payment Confirmations
                         {notificationCounts.payments > 0 && <Badge variant="destructive" className="ml-2">{notificationCounts.payments}</Badge>}
                     </TabsTrigger>
                 </TabsList>
