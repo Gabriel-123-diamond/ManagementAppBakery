@@ -1455,7 +1455,7 @@ export async function handleAddExpense(expenseData: Omit<Expense, 'id' | 'date'>
 
 export type PaymentConfirmation = {
   id: string;
-  date: Timestamp;
+  date: Timestamp | { toDate: () => Date };
   driverId: string;
   driverName: string;
   runId: string;
@@ -1470,11 +1470,11 @@ export type PaymentConfirmation = {
   partialPayments?: { method: string, amount: number }[];
   isExpense?: boolean;
   expenseDetails?: { category: string; description: string; };
-  approvedAt?: Timestamp;
+  approvedAt?: Timestamp | { toDate: () => Date };
 };
 
 
-export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> {
+export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmation, 'date' | 'approvedAt'> & { date: string | null; approvedAt: string | null; }>[] {
     try {
       const q = query(
         collection(db, 'payment_confirmations'),
@@ -1482,11 +1482,13 @@ export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> 
       );
       const snapshot = await getDocs(q);
       return snapshot.docs.map(docSnap => {
-          const data = docSnap.data();
+          const data = docSnap.data() as PaymentConfirmation;
           return { 
-              id: docSnap.id,
               ...data,
-          } as PaymentConfirmation;
+              id: docSnap.id,
+              date: data.date ? (data.date as Timestamp).toDate().toISOString() : null,
+              approvedAt: data.approvedAt ? (data.approvedAt as Timestamp).toDate().toISOString() : null,
+          };
       });
     } catch (error) {
       console.error("Error fetching payment confirmations:", error);
@@ -1510,13 +1512,13 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             const approvalTimestamp = serverTimestamp();
             
             if (action === 'approve') {
-                const salesDate = new Date((confirmationData.date as Timestamp).toDate());
-                if (isNaN(salesDate.getTime())) { 
+                const confirmationDate = (confirmationData.date as Timestamp)?.toDate() || new Date();
+                if (isNaN(confirmationDate.getTime())) { 
                     throw new Error("Invalid date found in payment confirmation record.");
                 }
                 
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDocId = format(salesDate, 'yyyy-MM-dd');
+                    const salesDocId = format(confirmationDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
                     const amount = confirmationData.amount;
@@ -1537,7 +1539,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                         transaction.update(salesDocRef, updates);
                     } else {
                         const initialData: Record<string, any> = {
-                            date: Timestamp.fromDate(startOfDay(salesDate)),
+                            date: Timestamp.fromDate(startOfDay(confirmationDate)),
                             description: `Daily Sales for ${salesDocId}`,
                             cash: 0, pos: 0, creditSales: 0, shortage: 0, transfer: 0, paystack: 0,
                             total: 0,
@@ -3370,4 +3372,5 @@ export async function returnUnusedIngredients(
   
 
       
+
 
