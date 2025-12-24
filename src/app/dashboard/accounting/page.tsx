@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -1199,7 +1200,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                     <div>
                                         <p className="font-semibold">{formatCurrency(c.amount)}</p>
                                         <p className="text-sm text-muted-foreground">{c.driverName}</p>
-                                        <p className="text-xs text-muted-foreground">{format(new Date(c.date), 'Pp')}</p>
+                                        <p className="text-xs text-muted-foreground">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
                                     </div>
                                     <Badge variant="outline">{c.paymentMethod}</Badge>
                                 </div>
@@ -1228,7 +1229,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                         ) : (
                             paginatedPending.map(c => (
                             <TableRow key={c.id}>
-                                <TableCell>{format(new Date(c.date), 'Pp')}</TableCell>
+                                <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
                                 <TableCell>{c.driverName}</TableCell>
                                 <TableCell>{c.runId.substring(0, 8)}...</TableCell>
                                 <TableCell>{c.customerName}</TableCell>
@@ -1278,7 +1279,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                         </div>
                                         <Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">{format(new Date(c.date), 'Pp')}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
                                 </Card>
                              ))
                         )}
@@ -1294,10 +1295,10 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                             ) : (
                                 paginatedResolved.map(c => (
                                 <TableRow key={c.id}>
-                                    <TableCell>{format(new Date(c.date), 'Pp')}</TableCell>
+                                    <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
                                     <TableCell>{c.driverName}</TableCell>
                                     <TableCell>{formatCurrency(c.amount)}</TableCell>
-                                    <TableCell><Badge variant="outline">{c.paymentMethod}</TableCell>
+                                    <TableCell><Badge variant="outline">{c.paymentMethod}</Badge></TableCell>
                                     <TableCell><Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge></TableCell>
                                 </TableRow>
                                 ))
