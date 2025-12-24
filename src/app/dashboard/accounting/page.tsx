@@ -1111,7 +1111,7 @@ function IndirectCostsTab({ categories, isReadOnly }: { categories: CostCategory
 // --- New Payments & Requests Tab ---
 function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { staff_id: string; name: string }, notificationBadge?: React.ReactNode, isReadOnly?: boolean }) {
     const { toast } = useToast();
-    const [confirmations, setConfirmations] = useState<PaymentConfirmation[]>([]);
+    const [confirmations, setConfirmations] = useState<(Omit<PaymentConfirmation, 'date' | 'approvedAt'> & { date: string | null; approvedAt: string | null; })[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [actioningId, setActioningId] = useState<string | null>(null);
     const [visiblePendingRows, setVisiblePendingRows] = useState<number | 'all'>(10);
@@ -1120,7 +1120,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
     const fetchConfirmations = useCallback(() => {
         setIsLoading(true);
         getPaymentConfirmations().then(data => {
-            setConfirmations(data as PaymentConfirmation[]);
+            setConfirmations(data);
         }).catch(() => {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch payment confirmations.' });
         }).finally(() => {
@@ -1183,7 +1183,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                     <div>
                                         <p className="font-semibold">{formatCurrency(c.amount)}</p>
                                         <p className="text-sm text-muted-foreground">{c.driverName}</p>
-                                        <p className="text-xs text-muted-foreground">{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</p>
+                                        <p className="text-xs text-muted-foreground">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
                                     </div>
                                     <Badge variant="outline">{c.paymentMethod}</Badge>
                                 </div>
@@ -1212,7 +1212,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                         ) : (
                             paginatedPending.map(c => (
                             <TableRow key={c.id}>
-                                <TableCell>{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</TableCell>
+                                <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
                                 <TableCell>{c.driverName}</TableCell>
                                 <TableCell>{c.runId.substring(0, 8)}...</TableCell>
                                 <TableCell>{c.customerName}</TableCell>
@@ -1262,7 +1262,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                         </div>
                                         <Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
                                 </Card>
                              ))
                         )}
@@ -1278,7 +1278,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                             ) : (
                                 paginatedResolved.map(c => (
                                 <TableRow key={c.id}>
-                                    <TableCell>{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</TableCell>
+                                    <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
                                     <TableCell>{c.driverName}</TableCell>
                                     <TableCell>{formatCurrency(c.amount)}</TableCell>
                                     <TableCell><Badge variant="outline">{c.paymentMethod}</Badge></TableCell>
