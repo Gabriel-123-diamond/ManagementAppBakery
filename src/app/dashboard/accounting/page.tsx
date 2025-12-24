@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Loader2, DollarSign, Receipt, TrendingDown, TrendingUp, PenSquare, RefreshCcw, HandCoins, Search, Calendar as CalendarIcon, ArrowRight, MoreVertical, AlertTriangle, MessageSquareQuote, CheckCircle, PackageSearch, Banknote, PlusCircle, Trash2, Settings2, Eye, FileDigit, CornerDownRight } from 'lucide-react';
+import { Loader2, DollarSign, Receipt, TrendingDown, TrendingUp, PenSquare, RefreshCcw, HandCoins, Search, ArrowRight, MoreVertical, AlertTriangle, MessageSquareQuote, CheckCircle, PackageSearch, Banknote, PlusCircle, Trash2, Settings2, Eye, FileDigit, CornerDownRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear as dateFnsEndOfYear } from 'date-fns';
 import { getFinancialSummary, getDebtRecords, getDirectCosts, getIndirectCosts, getClosingStocks, getWages, addDirectCost, addIndirectCost, getSales, getDrinkSalesSummary, PaymentConfirmation, getPaymentConfirmations, getCreditors, getDebtors, Creditor, Debtor, handleLogPayment, getWasteLogs, WasteLog, getDiscountRecords, getProfitAndLossStatement, ProfitAndLossStatement, getAccountSummary, SupplyRequest, getPendingSupplyRequests, approveStockIncrease, declineStockIncrease, handlePaymentConfirmation } from '@/app/actions';
@@ -28,8 +28,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { Separator } from '@/components/ui/separator';
@@ -38,6 +36,7 @@ import { db } from '@/lib/firebase';
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 
 // --- Helper Functions & Type Definitions ---
@@ -429,37 +428,6 @@ function LogPaymentDialog({ creditor, onPaymentLogged, disabled }: { creditor: C
     )
 }
 
-function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
-    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
-    const [isOpen, setIsOpen] = useState(false);
-
-    useEffect(() => {
-        setTempDate(date);
-    }, [date]);
-
-    const handleApply = () => {
-        setDate(tempDate);
-        setIsOpen(false);
-    }
-
-    return (
-         <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal",!date && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date?.from ? ( date.to ? (<> {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")} </>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align={align}>
-                <Calendar initialFocus mode="range" defaultMonth={tempDate?.from} selected={tempDate} onSelect={setTempDate} numberOfMonths={2}/>
-                <div className="p-2 border-t flex justify-end">
-                    <Button onClick={handleApply}>Apply</Button>
-                </div>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
 
 // --- Tab Components ---
 
@@ -500,7 +468,7 @@ function SummaryTab() {
                         <CardTitle>Summary of Account</CardTitle>
                         <CardDescription>A top-level overview of key financial accounts.</CardDescription>
                     </div>
-                     <DateRangeFilter date={date} setDate={setDate} />
+                     <DateRangePicker date={date} onDateChange={setDate} />
                 </div>
             </CardHeader>
             <CardContent>
@@ -593,7 +561,7 @@ function FinancialsTab() {
                         <CardTitle>Trading, Profit &amp; Loss Statement</CardTitle>
                         <CardDescription>For the period ending {date?.to ? format(date.to, 'PPP') : format(new Date(), 'PPP')}</CardDescription>
                     </div>
-                     <DateRangeFilter date={date} setDate={setDate} />
+                     <DateRangePicker date={date} onDateChange={setDate} />
                 </div>
             </CardHeader>
             <CardContent>
@@ -792,7 +760,7 @@ function DebtorsCreditorsTab({ isReadOnly }: { isReadOnly?: boolean }) {
                             <CardTitle>Debtor/Creditor Ledger</CardTitle>
                             <CardDescription>A summary ledger of debits and credits from the accounting period.</CardDescription>
                         </div>
-                         <DateRangeFilter date={date} setDate={setDate} />
+                         <DateRangePicker date={date} onDateChange={setDate} />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -947,7 +915,7 @@ function DirectCostsTab({ categories, isReadOnly }: { categories: CostCategory[]
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input placeholder="Search..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <DateRangeFilter date={date} setDate={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} />
                             </div>
                         </div>
                         <div className="mt-4">
@@ -1091,7 +1059,7 @@ function IndirectCostsTab({ categories, isReadOnly }: { categories: CostCategory
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input placeholder="Search..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <DateRangeFilter date={date} setDate={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} />
                             </div>
                         </div>
                         <div className="mt-4">
@@ -1216,7 +1184,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                     <div>
                                         <p className="font-semibold">{formatCurrency(c.amount)}</p>
                                         <p className="text-sm text-muted-foreground">{c.driverName}</p>
-                                        <p className="text-xs text-muted-foreground">{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</p>
+                                        <p className="text-xs text-muted-foreground">{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</p>
                                     </div>
                                     <Badge variant="outline">{c.paymentMethod}</Badge>
                                 </div>
@@ -1245,7 +1213,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                         ) : (
                             paginatedPending.map(c => (
                             <TableRow key={c.id}>
-                                <TableCell>{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</TableCell>
+                                <TableCell>{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</TableCell>
                                 <TableCell>{c.driverName}</TableCell>
                                 <TableCell>{c.runId.substring(0, 8)}...</TableCell>
                                 <TableCell>{c.customerName}</TableCell>
@@ -1295,7 +1263,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                         </div>
                                         <Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</p>
                                 </Card>
                              ))
                         )}
@@ -1311,7 +1279,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                             ) : (
                                 paginatedResolved.map(c => (
                                 <TableRow key={c.id}>
-                                    <TableCell>{c.date ? format(new Date(c.date as any), 'Pp') : 'N/A'}</TableCell>
+                                    <TableCell>{c.date ? format(c.date.toDate(), 'Pp') : 'N/A'}</TableCell>
                                     <TableCell>{c.driverName}</TableCell>
                                     <TableCell>{formatCurrency(c.amount)}</TableCell>
                                     <TableCell><Badge variant="outline">{c.paymentMethod}</Badge></TableCell>
@@ -1470,7 +1438,7 @@ function SalesRecordsTab() {
                             <CardTitle>Daily Sales Records</CardTitle>
                             <CardDescription>A log of all daily sales transactions.</CardDescription>
                         </div>
-                        <DateRangeFilter date={date} setDate={setDate} />
+                        <DateRangePicker date={date} onDateChange={setDate} />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -1610,7 +1578,7 @@ function DrinkSalesTab() {
                             onChange={e => setSalesMargin(Number(e.target.value))}
                             className="w-20"
                         />
-                         <DateRangeFilter date={date} setDate={setDate} />
+                         <DateRangePicker date={date} onDateChange={setDate} />
                     </div>
                 </div>
             </CardHeader>
@@ -1746,7 +1714,7 @@ function ClosingStockTab() {
     return (
         <div className="space-y-6">
              <div className="flex justify-end items-center gap-4">
-                <DateRangeFilter date={date} setDate={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} />
             </div>
             <div className="grid md:grid-cols-2 gap-6">
                 <Card>
@@ -1943,7 +1911,7 @@ function WagesTab() {
                         <CardTitle>Wages &amp; Salaries</CardTitle>
                         <CardDescription>Monthly staff emolument records.</CardDescription>
                     </div>
-                    <DateRangeFilter date={date} setDate={setDate} />
+                    <DateRangePicker date={date} onDateChange={setDate} />
                 </div>
             </CardHeader>
             <CardContent>
@@ -2057,7 +2025,7 @@ function BusinessHealthTab() {
     return (
         <div className="space-y-6">
             <div className="flex justify-end">
-                <DateRangeFilter date={date} setDate={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} />
             </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <Card className="flex flex-col h-full">

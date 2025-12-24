@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Package2, Car, Users, DollarSign, Filter, MoreVertical, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Package2, Car, Users, DollarSign, Filter, MoreVertical } from 'lucide-react';
 import { getSalesRuns, getAllSalesRuns, getSalesStats } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import type { SalesRun as SalesRunType } from '@/app/actions';
@@ -18,12 +18,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format, eachDayOfInterval, subDays, startOfDay, endOfDay } from 'date-fns';
 import { RevenueChart } from '@/components/revenue-chart';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 
 type User = {
@@ -104,8 +102,6 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
     const [filterDriver, setFilterDriver] = useState('all');
     const [sort, setSort] = useState('date_desc');
     const [date, setDate] = useState<DateRange | undefined>({ from: subDays(new Date(), 6), to: new Date() });
-    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
-    const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
     
     const showOnlyActive = searchParams.get('status') === 'active';
 
@@ -173,10 +169,6 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
 
     }, [filteredAndSortedRuns, date]);
     
-    const handleDateApply = () => {
-        setDate(tempDate);
-        setIsDatePopoverOpen(false);
-    }
     
     const title = showOnlyActive ? 'Active Sales Runs' : 'All Sales Runs';
     const description = showOnlyActive ? 'Monitor all currently active sales runs.' : 'Monitor all active and completed sales runs across all drivers.';
@@ -213,44 +205,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                         <div className="text-2xl font-bold">{drivers.length > 1 ? drivers.length - 1 : 0}</div>
                     </CardContent>
                 </Card>
-                 <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-                    <PopoverTrigger asChild>
-                        <Card className="cursor-pointer hover:bg-muted/50 transition-colors">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Date Range</CardTitle>
-                                <CalendarIcon className="h-4 w-4 text-muted-foreground"/>
-                            </CardHeader>
-                            <CardContent>
-                            <div className="text-lg font-bold">
-                                {date?.from ? (
-                                    date.to ? (
-                                        <>
-                                        {format(date.from, "LLL dd")} - {format(date.to, "LLL dd, y")}
-                                        </>
-                                    ) : (
-                                        format(date.from, "LLL dd, y")
-                                    )
-                                    ) : (
-                                    <span>All time</span>
-                                    )}
-                            </div>
-                            </CardContent>
-                        </Card>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="end">
-                        <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={tempDate?.from}
-                            selected={tempDate}
-                            onSelect={setTempDate}
-                            numberOfMonths={2}
-                        />
-                         <div className="p-2 border-t flex justify-end">
-                            <Button onClick={handleDateApply}>Apply</Button>
-                        </div>
-                    </PopoverContent>
-                </Popover>
+                 <DateRangePicker date={date} onDateChange={setDate} className="lg:col-span-1" />
             </div>
 
              <Card className="xl:col-span-2">
