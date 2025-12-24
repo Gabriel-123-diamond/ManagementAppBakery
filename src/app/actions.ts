@@ -360,33 +360,56 @@ type InitiateTransferResult = {
 
 export async function handleInitiateTransfer(data: any, user: { staff_id: string, name: string }): Promise<InitiateTransferResult> {
     try {
-        let totalRevenue = 0;
-        if (data.is_sales_run && data.items) {
+        await runTransaction(db, async (transaction) => {
             const productIds = data.items.map((item: any) => item.productId);
-            if (productIds.length > 0) {
-                const productsQuery = query(collection(db, 'products'), where('__name__', 'in', productIds));
-                const productsSnapshot = await getDocs(productsQuery);
-                const priceMap = new Map(productsSnapshot.docs.map(doc => [doc.id, doc.data().price]));
+            const productRefs = productIds.map((id: string) => doc(db, 'products', id));
+            const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+            let totalRevenue = 0;
+            const updatedItems = [];
+
+            for (let i = 0; i < productDocs.length; i++) {
+                const productDoc = productDocs[i];
+                if (!productDoc.exists()) {
+                    throw new Error(`Product with ID ${productIds[i]} not found.`);
+                }
+                const productData = productDoc.data();
+                const requestedQuantity = data.items[i].quantity;
+
+                if (productData.stock < requestedQuantity) {
+                    throw new Error(`Not enough stock for ${productData.name}. Available: ${productData.stock}, Requested: ${requestedQuantity}`);
+                }
+
+                // Deduct stock from main inventory
+                transaction.update(productRefs[i], { stock: increment(-requestedQuantity) });
                 
-                totalRevenue = data.items.reduce((sum: number, item: any) => {
-                    const price = priceMap.get(item.productId) || 0;
-                    return sum + (price * item.quantity);
-                }, 0);
+                updatedItems.push({
+                    productId: productIds[i],
+                    productName: productData.name,
+                    quantity: requestedQuantity,
+                    price: productData.price || 0
+                });
+
+                if (data.is_sales_run) {
+                    totalRevenue += (productData.price || 0) * requestedQuantity;
+                }
             }
-        }
-        
-        await addDoc(collection(db, "transfers"), {
-            ...data,
-            from_staff_id: user.staff_id,
-            from_staff_name: user.name,
-            date: serverTimestamp(),
-            status: 'pending',
-            totalRevenue: totalRevenue
+
+            const transferRef = doc(collection(db, "transfers"));
+            transaction.set(transferRef, {
+                ...data,
+                items: updatedItems,
+                from_staff_id: user.staff_id,
+                from_staff_name: user.name,
+                date: serverTimestamp(),
+                status: 'pending',
+                totalRevenue,
+            });
         });
         return { success: true };
     } catch (error) {
         console.error("Transfer initiation error:", error);
-        return { success: false, error: "Failed to initiate transfer." };
+        return { success: false, error: (error as Error).message || "Failed to initiate transfer." };
     }
 }
 
@@ -1488,8 +1511,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (confirmationData.status !== 'pending') throw new Error("This confirmation has already been processed.");
             
             const newStatus = action === 'approve' ? 'approved' : 'declined';
-            transaction.update(confirmationRef, { status: newStatus });
-
+            
             if (action === 'approve') {
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
                     const salesDate = new Date(confirmationData.date); // Use the confirmation date for the sales record
@@ -1556,6 +1578,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                     transaction.update(orderRef, { status: 'Cancelled' });
                 }
             }
+             transaction.update(confirmationRef, { status: newStatus });
         });
         return { success: true };
     } catch (error) {
@@ -1975,8 +1998,15 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             
             if (action === 'decline') {
                 transaction.update(transferRef, { status: 'cancelled' });
+                // If it's a regular transfer being declined, return stock to main inventory
+                if (transfer.status === 'pending') {
+                    for (const item of transfer.items) {
+                        const productRef = doc(db, 'products', item.productId);
+                        transaction.update(productRef, { stock: increment(item.quantity) });
+                    }
+                }
                 // If it's a return that's declined, revert the original run's status and stock
-                if (transfer.status === 'pending_return') {
+                else if (transfer.status === 'pending_return') {
                     for (const item of transfer.items) {
                         const staffStockRef = doc(db, 'staff', transfer.from_staff_id, 'personal_stock', item.productId);
                         transaction.update(staffStockRef, { stock: increment(item.quantity) });
@@ -1993,7 +2023,6 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
             if (transfer.status === 'pending_return') {
                 for (const item of transfer.items) {
                     const productRef = doc(db, 'products', item.productId);
-                     // First, get the product document to ensure it exists before trying to update it.
                     const productDoc = await transaction.get(productRef);
                     if (!productDoc.exists()) {
                         throw new Error(`Product with ID ${item.productId} not found.`);
@@ -2001,8 +2030,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                     transaction.update(productRef, { stock: increment(item.quantity) });
                 }
 
-                // If it was a return from a specific sales run, mark that run as completed.
-                 if (transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
+                if (transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
                     const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
                     transaction.update(originalRunRef, { status: 'return_completed' });
                 }
@@ -2010,7 +2038,6 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                 transaction.update(transferRef, { status: 'completed' }); 
 
             } else if (transfer.notes?.startsWith('Return from production batch')) {
-                // Acknowledge stock from production
                 for (const item of transfer.items) {
                     const productRef = doc(db, 'products', item.productId);
                     transaction.update(productRef, { stock: increment(item.quantity) });
@@ -2022,9 +2049,7 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                 }
             
             } else { 
-                // Acknowledge a standard transfer TO staff
                 for (const item of transfer.items) {
-                    // This part is now just a formality as stock is already deducted
                     const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
                     const staffStockDoc = await transaction.get(staffStockRef);
                     if (staffStockDoc.exists()) {
@@ -2461,6 +2486,8 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
 
         ordersSnapshot.docs.forEach(docSnap => {
             const order = docSnap.data();
+            if (order.status !== 'Completed') return; // Only count completed orders toward totals
+
             const customerId = order.customerId || 'walk-in';
             const customerName = order.customerName || 'Walk-in';
 
@@ -2468,11 +2495,9 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
                 salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
             }
             
-            if (order.status === 'Completed') {
-                salesByCustomer[customerId].totalSold += order.total;
-                if (order.paymentMethod !== 'Credit') {
-                    salesByCustomer[customerId].totalPaid += order.total;
-                }
+            salesByCustomer[customerId].totalSold += order.total;
+            if (order.paymentMethod !== 'Credit') {
+                salesByCustomer[customerId].totalPaid += order.total;
             }
         });
 
@@ -2529,33 +2554,33 @@ type SaleData = {
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
+            const newOrderRef = doc(collection(db, 'orders'));
+            const confirmationRef = doc(collection(db, 'payment_confirmations'));
+            
+            // --- READS ---
             const runRef = doc(db, 'transfers', data.runId);
             const runDoc = await transaction.get(runRef);
             if (!runDoc.exists()) throw new Error("Sales run not found.");
+
+            const staffDoc = await transaction.get(doc(db, 'staff', data.staffId));
+            const driverName = staffDoc.exists() ? staffDoc.data().name : 'Unknown';
 
             if (data.customerId !== 'walk-in') {
                 const customerRef = doc(db, 'customers', data.customerId);
                 const customerDoc = await transaction.get(customerRef);
                 if (!customerDoc.exists()) throw new Error("Customer not found.");
-                if (data.paymentMethod === 'Credit') {
-                    transaction.update(customerRef, { amountOwed: increment(data.total) });
-                }
             }
-            
+
             for (const item of data.items) {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
                 if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
                     throw new Error(`Not enough stock for ${item.name}.`);
                 }
-                transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
             
-            const staffDoc = await transaction.get(doc(db, 'staff', data.staffId));
-            const driverName = staffDoc.exists() ? staffDoc.data().name : 'Unknown';
-            
-            const newOrderRef = doc(collection(db, 'orders'));
-            transaction.set(newOrderRef, {
+            // --- WRITES ---
+            const newOrderData = {
                 salesRunId: data.runId,
                 customerId: data.customerId,
                 customerName: data.customerName,
@@ -2566,14 +2591,17 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 date: serverTimestamp(),
                 staffId: data.staffId,
                 staffName: driverName,
-                status: data.paymentMethod === 'Credit' ? 'Completed' : 'Pending',
+                status: 'Pending',
                 id: newOrderRef.id,
                 isDebtPayment: false,
-            });
-            
-            if (data.paymentMethod !== 'Credit') {
-                const confirmationRef = doc(collection(db, 'payment_confirmations'));
-                transaction.set(confirmationRef, {
+            };
+
+            if(data.paymentMethod === 'Credit') {
+                newOrderData.status = 'Completed';
+                const customerRef = doc(db, 'customers', data.customerId);
+                transaction.update(customerRef, { amountOwed: increment(data.total) });
+            } else {
+                 transaction.set(confirmationRef, {
                     runId: data.runId,
                     orderId: newOrderRef.id,
                     customerId: data.customerId,
@@ -2587,6 +2615,13 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     paymentMethod: data.paymentMethod,
                     isDebtPayment: false,
                 });
+            }
+
+            transaction.set(newOrderRef, newOrderData);
+
+            for (const item of data.items) {
+                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
+                transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
 
             return newOrderRef.id;
@@ -2615,6 +2650,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
     try {
         const orderId = await runTransaction(db, async (transaction) => {
             const newOrderRef = doc(collection(db, 'orders'));
+            const confirmationRef = doc(collection(db, 'payment_confirmations'));
             const orderDate = new Date(data.date);
 
             for (const item of data.items) {
@@ -2643,7 +2679,6 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             
             transaction.set(newOrderRef, orderData);
             
-            const confirmationRef = doc(collection(db, 'payment_confirmations'));
             transaction.set(confirmationRef, {
                 runId: `pos-sale-${newOrderRef.id}`,
                 orderId: newOrderRef.id,
@@ -3281,3 +3316,6 @@ export async function returnUnusedIngredients(
     
 
 
+
+
+    
