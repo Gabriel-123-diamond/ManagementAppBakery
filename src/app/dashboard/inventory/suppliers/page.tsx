@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -462,11 +461,11 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
             description: doc.data().description,
         } as PaymentLog));
         
-        const getDate = (log: any) => {
+        const getDate = (log: any): Date => {
             if (!log.date) return new Date(0);
             if (log.date.toDate) return log.date.toDate();
             if (typeof log.date === 'string') return new Date(log.date);
-            return new Date(0);
+            return new Date(log.date);
         }
 
         const combinedLogs: any[] = [
@@ -474,47 +473,36 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
             ...paymentLogs.map(log => ({ ...log, type: 'payment', date: getDate(log) }))
         ];
         
-        combinedLogs.sort((a,b) => b.date - a.date);
+        combinedLogs.sort((a,b) => a.date - b.date); // Sort oldest to newest for balance calculation
 
-        let runningBalance = supplier.amountOwed - supplier.amountPaid;
+        let runningBalance = 0;
 
         const calculatedTransactions = combinedLogs.map(log => {
              if (log.type === 'supply') {
-                const transaction = {
+                runningBalance += log.totalCost;
+                return {
                     date: log.date,
                     description: `Supply: ${log.ingredientName}`,
                     debit: log.totalCost,
                     credit: null,
                     balance: runningBalance,
-                }
-                runningBalance += log.totalCost; // This was incorrect, should decrease balance from supplier's perspective
-                return transaction;
+                };
             } else { // payment
-                const transaction = {
+                runningBalance -= log.amount;
+                return {
                     date: log.date,
                     description: 'Payment',
                     debit: null,
                     credit: log.amount,
                     balance: runningBalance,
-                }
-                runningBalance -= log.amount;
-                return transaction;
+                };
             }
-        }).reverse(); // Reverse to calculate balance correctly from past to present
+        });
         
-        // Recalculate balance from oldest to newest
-        let balance = 0;
-        const finalTransactions = calculatedTransactions.map(t => {
-            if(t.debit) balance += t.debit;
-            if(t.credit) balance -= t.credit;
-            return {...t, balance};
-        }).reverse(); // Reverse back to show newest first
-
-        
-        setTransactions(finalTransactions);
+        setTransactions(calculatedTransactions.reverse()); // Show newest first
         setIsLoading(false);
 
-    }, [supplier.id, supplier.name, user, supplier.amountOwed, supplier.amountPaid]);
+    }, [supplier.id, supplier.name, user]);
     
     useEffect(() => {
         const unsub = onSnapshot(doc(db, 'suppliers', supplier.id), (doc) => {
@@ -617,7 +605,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                             </div>
                            <DateRangeFilter date={date} setDate={setDate} />
                             {canLogPayments && user && (
-                                <LogPaymentDialog supplier={supplier} user={user} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
+                                <LogPaymentDialog supplier={supplier} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
                             )}
                             {canManageSupplies && !canLogPayments && (
                               <Button onClick={() => setIsLogDialogOpen(true)} disabled={isReadOnly}>
