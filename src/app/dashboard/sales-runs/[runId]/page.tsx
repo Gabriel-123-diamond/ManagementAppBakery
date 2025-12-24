@@ -694,7 +694,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
             customerId: selectedCustomerId,
             customerName: customerType === 'walk-in' ? (customerName || 'Walk-in') : (selectedCustomer?.name || 'Registered Customer'),
             paymentMethod: partialPayments ? 'Split' : paymentMethod,
-            partialPayments: partialPayments,
+            partialPayments: partialPayments || null,
             staffId: user.staff_id,
             total,
         };
@@ -1802,6 +1802,7 @@ function SalesRunDetailsPageClientContent() {
                                 <TableHead>Product</TableHead>
                                 <TableHead className="text-right">Initial Qty</TableHead>
                                 <TableHead className="text-right">Sold</TableHead>
+                                <TableHead className="text-right">Pending Sale</TableHead>
                                 <TableHead className="text-right">Returned (Pending)</TableHead>
                                 <TableHead className="text-right">Net Remaining</TableHead>
                                 {user?.role === 'Developer' && <TableHead className="text-right">Actions</TableHead>}
@@ -1810,14 +1811,16 @@ function SalesRunDetailsPageClientContent() {
                         <TableBody>
                             {run.items.map(item => {
                                 const soldQty = orders.filter(o => o.status === 'Completed').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
+                                const pendingSaleQty = orders.filter(o => o.status === 'Awaiting Payment Approval').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
                                 const pendingReturnQty = pendingReturns.flatMap(pr => pr.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
-                                const netRemaining = item.quantity - soldQty - pendingReturnQty;
+                                const netRemaining = item.quantity - soldQty - pendingReturnQty - pendingSaleQty;
                                 const fullProduct = allProducts.find(p => p.id === item.productId);
                                 return (
                                     <TableRow key={item.productId}>
                                         <TableCell>{item.productName}</TableCell>
                                         <TableCell className="text-right">{item.quantity}</TableCell>
                                         <TableCell className="text-right">{soldQty}</TableCell>
+                                        <TableCell className="text-right text-yellow-500">{pendingSaleQty}</TableCell>
                                         <TableCell className="text-right text-orange-500">{pendingReturnQty}</TableCell>
                                         <TableCell className="text-right font-bold">{netRemaining}</TableCell>
                                         {user?.role === 'Developer' && (
@@ -2057,3 +2060,5 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
+
+    
