@@ -27,7 +27,7 @@ import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { DatePickerSplit } from "@/components/ui/date-picker-split";
 
 
 const chartConfig = {
@@ -299,7 +299,7 @@ export default function AttendancePage() {
                                <CardTitle>Attendance Log</CardTitle>
                                <CardDescription>A complete history of all clock-in and clock-out events.</CardDescription>
                             </div>
-                             <DateRangeWithInputs date={date} onDateChange={setDate} />
+                             <DatePickerSplit date={date} onDateChange={setDate} />
                         </div>
                     </CardHeader>
                     <CardContent>

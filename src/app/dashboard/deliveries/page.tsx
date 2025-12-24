@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Package2, Car, Users, DollarSign, Filter, MoreVertical } from 'lucide-react';
+import { Loader2, Package2, Car, Users, DollarSign, Filter, MoreVertical, Calendar as CalendarIcon } from 'lucide-react';
 import { getSalesRuns, getAllSalesRuns, getSalesStats } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import type { SalesRun as SalesRunType } from '@/app/actions';
@@ -19,7 +19,7 @@ import { RevenueChart } from '@/components/revenue-chart';
 import { DateRange } from "react-day-picker";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { DatePickerSplit } from "@/components/ui/date-picker-split";
 
 
 type User = {
@@ -203,7 +203,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                         <div className="text-2xl font-bold">{drivers.length > 1 ? drivers.length - 1 : 0}</div>
                     </CardContent>
                 </Card>
-                 <DateRangeWithInputs date={date} onDateChange={setDate} className="lg:col-span-1" />
+                 <DatePickerSplit date={date} onDateChange={setDate} />
             </div>
 
              <Card className="xl:col-span-2">
