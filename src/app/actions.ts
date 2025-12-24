@@ -1512,6 +1512,9 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (action === 'approve') {
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
                     const salesDate = new Date(confirmationData.date); // Use the confirmation date for the sales record
+                    if (isNaN(salesDate.getTime())) { // Check for invalid date
+                        throw new Error("Invalid date found in payment confirmation record.");
+                    }
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
@@ -3157,7 +3160,7 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
             const ordersSnapshot = await getDocs(ordersQuery);
 
-            const salesDate = new Date(runData.date.toDate()); // Use the run's date for sales record
+            const salesDate = new Date((runData.date as Timestamp).toDate()); // Use the run's date for sales record
             const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
@@ -3315,3 +3318,4 @@ export async function returnUnusedIngredients(
 
 
     
+
