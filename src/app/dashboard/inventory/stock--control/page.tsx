@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -1042,7 +1042,7 @@ export default function StockControlPage() {
                             <CardTitle>All Pending Transfers</CardTitle>
                             <CardDescription>A log of all transfers awaiting acknowledgement across the system.</CardDescription>
                         </div>
-                        <DateRangePicker date={allPendingDate} onDateChange={setAllPendingDate}/>
+                        <DateRangePicker date={allPendingDate} onDateChange={setAllPendingDate} align="end"/>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -1092,7 +1092,7 @@ export default function StockControlPage() {
                     <CardTitle>My Initiated Transfers Log</CardTitle>
                     <CardDescription>A log of transfers you have initiated.</CardDescription>
                 </div>
-                <DateRangePicker date={date} onDateChange={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} align="end" />
             </div>
         </CardHeader>
         <CardContent>
