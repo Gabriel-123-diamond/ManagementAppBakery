@@ -1475,7 +1475,7 @@ export type PaymentConfirmation = {
 };
 
 
-export async function getPaymentConfirmations(): Promise<(Omit<PaymentConfirmation, 'date'> & { date: string })[]> {
+export async function getPaymentConfirmations(): Promise<(Omit<PaymentConfirmation, 'date' | 'approvedAt'> & { date: string, approvedAt?: string })[]> {
     try {
       const q = query(
         collection(db, 'payment_confirmations'),
@@ -1488,7 +1488,8 @@ export async function getPaymentConfirmations(): Promise<(Omit<PaymentConfirmati
               id: docSnap.id,
               ...data,
               date: (data.date as Timestamp).toDate().toISOString(),
-          } as Omit<PaymentConfirmation, 'date'> & { date: string };
+              approvedAt: data.approvedAt ? (data.approvedAt as Timestamp).toDate().toISOString() : undefined,
+          } as Omit<PaymentConfirmation, 'date' | 'approvedAt'> & { date: string, approvedAt?: string };
       });
     } catch (error) {
       console.error("Error fetching payment confirmations:", error);
@@ -1512,12 +1513,13 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             const approvalTimestamp = serverTimestamp();
             
             if (action === 'approve') {
+                const salesDate = confirmationData.date ? (confirmationData.date as Timestamp).toDate() : new Date();
+
+                if (isNaN(salesDate.getTime())) { 
+                    throw new Error("Invalid date found in payment confirmation record.");
+                }
                 
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDate = new Date(confirmationData.date as any); // Use `as any` to bypass strict type checking for this conversion
-                    if (isNaN(salesDate.getTime())) { 
-                        throw new Error("Invalid date found in payment confirmation record.");
-                    }
                     const salesDocId = format(salesDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
@@ -2577,7 +2579,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             }
 
             const newOrderRef = doc(collection(db, 'orders'));
-            const newOrderData = {
+            const newOrderData: Record<string, any> = {
                 salesRunId: data.runId,
                 customerId: data.customerId,
                 customerName: data.customerName,
@@ -2588,7 +2590,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 date: serverTimestamp(),
                 staffId: data.staffId,
                 staffName: staffDoc.data().name,
-                status: 'Pending',
+                status: 'Awaiting Payment Approval', // Corrected Status
                 id: newOrderRef.id,
             };
 
@@ -2670,7 +2672,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 date: serverTimestamp(),
                 staffId: data.staffId,
                 staffName: data.staffName,
-                status: 'Pending',
+                status: 'Awaiting Payment Approval', // Corrected Status
             };
             
             transaction.set(newOrderRef, orderData);
