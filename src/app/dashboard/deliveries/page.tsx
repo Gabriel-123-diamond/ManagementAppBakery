@@ -19,7 +19,7 @@ import { RevenueChart } from '@/components/revenue-chart';
 import { DateRange } from "react-day-picker";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { DatePickerSplit } from "@/components/ui/date-picker-split";
+import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
 
 
 type User = {
@@ -203,7 +203,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                         <div className="text-2xl font-bold">{drivers.length > 1 ? drivers.length - 1 : 0}</div>
                     </CardContent>
                 </Card>
-                 <DatePickerSplit date={date} onDateChange={setDate} />
+                 <DateRangeWithInputs date={date} onDateChange={setDate} />
             </div>
 
              <Card className="xl:col-span-2">
