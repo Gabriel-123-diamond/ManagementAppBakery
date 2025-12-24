@@ -301,7 +301,7 @@ export default function AttendancePage() {
                                <CardTitle>Attendance Log</CardTitle>
                                <CardDescription>A complete history of all clock-in and clock-out events.</CardDescription>
                             </div>
-                             <DateRangePicker date={date} onDateChange={setDate} />
+                             <DateRangePicker date={date} onDateChange={setDate} align="end" />
                         </div>
                     </CardHeader>
                     <CardContent>

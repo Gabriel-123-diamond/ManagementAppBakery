@@ -330,7 +330,7 @@ function ViewReportsTab() {
                                             {staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
-                                    <DateRangePicker date={dateFilter} onDateChange={setDateFilter} />
+                                    <DateRangePicker date={dateFilter} onDateChange={setDateFilter} align="end" />
                                 </div>
                             </div>
                         </CardHeader>

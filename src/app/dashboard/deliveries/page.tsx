@@ -205,7 +205,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                         <div className="text-2xl font-bold">{drivers.length > 1 ? drivers.length - 1 : 0}</div>
                     </CardContent>
                 </Card>
-                 <DateRangePicker date={date} onDateChange={setDate} className="lg:col-span-1" />
+                 <DateRangePicker date={date} onDateChange={setDate} className="lg:col-span-1" align="end" />
             </div>
 
              <Card className="xl:col-span-2">

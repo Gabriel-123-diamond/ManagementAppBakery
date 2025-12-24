@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -272,7 +273,7 @@ function PayrollTab() {
                                     {format(payrollPeriod, 'MMMM yyyy')}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent className="w-auto p-0" align="end">
                                 <Calendar
                                     mode="single"
                                     month={payrollPeriod}

@@ -468,7 +468,7 @@ function SummaryTab() {
                         <CardTitle>Summary of Account</CardTitle>
                         <CardDescription>A top-level overview of key financial accounts.</CardDescription>
                     </div>
-                     <DateRangePicker date={date} onDateChange={setDate} />
+                     <DateRangePicker date={date} onDateChange={setDate} align="end" />
                 </div>
             </CardHeader>
             <CardContent>
@@ -561,7 +561,7 @@ function FinancialsTab() {
                         <CardTitle>Trading, Profit &amp; Loss Statement</CardTitle>
                         <CardDescription>For the period ending {date?.to ? format(date.to, 'PPP') : format(new Date(), 'PPP')}</CardDescription>
                     </div>
-                     <DateRangePicker date={date} onDateChange={setDate} />
+                     <DateRangePicker date={date} onDateChange={setDate} align="end" />
                 </div>
             </CardHeader>
             <CardContent>
@@ -760,7 +760,7 @@ function DebtorsCreditorsTab({ isReadOnly }: { isReadOnly?: boolean }) {
                             <CardTitle>Debtor/Creditor Ledger</CardTitle>
                             <CardDescription>A summary ledger of debits and credits from the accounting period.</CardDescription>
                         </div>
-                         <DateRangePicker date={date} onDateChange={setDate} />
+                         <DateRangePicker date={date} onDateChange={setDate} align="end" />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -915,7 +915,7 @@ function DirectCostsTab({ categories, isReadOnly }: { categories: CostCategory[]
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input placeholder="Search..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <DateRangePicker date={date} onDateChange={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} align="end" />
                             </div>
                         </div>
                         <div className="mt-4">
@@ -1059,7 +1059,7 @@ function IndirectCostsTab({ categories, isReadOnly }: { categories: CostCategory
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input placeholder="Search..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <DateRangePicker date={date} onDateChange={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} align="end" />
                             </div>
                         </div>
                         <div className="mt-4">
@@ -1438,7 +1438,7 @@ function SalesRecordsTab() {
                             <CardTitle>Daily Sales Records</CardTitle>
                             <CardDescription>A log of all daily sales transactions.</CardDescription>
                         </div>
-                        <DateRangePicker date={date} onDateChange={setDate} />
+                        <DateRangePicker date={date} onDateChange={setDate} align="end" />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -1578,7 +1578,7 @@ function DrinkSalesTab() {
                             onChange={e => setSalesMargin(Number(e.target.value))}
                             className="w-20"
                         />
-                         <DateRangePicker date={date} onDateChange={setDate} />
+                         <DateRangePicker date={date} onDateChange={setDate} align="end" />
                     </div>
                 </div>
             </CardHeader>
@@ -1714,7 +1714,7 @@ function ClosingStockTab() {
     return (
         <div className="space-y-6">
              <div className="flex justify-end items-center gap-4">
-                <DateRangePicker date={date} onDateChange={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} align="end" />
             </div>
             <div className="grid md:grid-cols-2 gap-6">
                 <Card>
@@ -1911,7 +1911,7 @@ function WagesTab() {
                         <CardTitle>Wages &amp; Salaries</CardTitle>
                         <CardDescription>Monthly staff emolument records.</CardDescription>
                     </div>
-                    <DateRangePicker date={date} onDateChange={setDate} />
+                    <DateRangePicker date={date} onDateChange={setDate} align="end" />
                 </div>
             </CardHeader>
             <CardContent>
@@ -2025,7 +2025,7 @@ function BusinessHealthTab() {
     return (
         <div className="space-y-6">
             <div className="flex justify-end">
-                <DateRangePicker date={date} onDateChange={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} align="end" />
             </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <Card className="flex flex-col h-full">
@@ -2495,4 +2495,5 @@ export default function AccountingPage() {
     </div>
   );
 }
+
 
