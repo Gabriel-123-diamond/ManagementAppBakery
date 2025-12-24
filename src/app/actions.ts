@@ -361,15 +361,13 @@ type InitiateTransferResult = {
 export async function handleInitiateTransfer(data: any, user: { staff_id: string, name: string }): Promise<InitiateTransferResult> {
     try {
         await runTransaction(db, async (transaction) => {
-            const productIds = data.items.map((item: any) => item.productId);
-            
-            for (let i = 0; i < productIds.length; i++) {
-                const productId = productIds[i];
-                const productRef = doc(db, 'products', productId);
-                const productDoc = await transaction.get(productRef);
-                
+            const productRefs = data.items.map((item: any) => doc(db, 'products', item.productId));
+            const productDocs = await Promise.all(productRefs.map((ref: any) => transaction.get(ref)));
+
+            for (let i = 0; i < productDocs.length; i++) {
+                const productDoc = productDocs[i];
                 if (!productDoc.exists()) {
-                    throw new Error(`Product with ID ${productId} not found.`);
+                    throw new Error(`Product with ID ${data.items[i].productId} not found.`);
                 }
                 const productData = productDoc.data();
                 const requestedQuantity = data.items[i].quantity;
@@ -377,23 +375,24 @@ export async function handleInitiateTransfer(data: any, user: { staff_id: string
                 if (productData.stock < requestedQuantity) {
                     throw new Error(`Not enough stock for ${productData.name}. Available: ${productData.stock}, Requested: ${requestedQuantity}`);
                 }
-                // Deduct stock from main inventory
-                transaction.update(productRef, { stock: increment(-requestedQuantity) });
             }
 
-            const transferRef = doc(collection(db, "transfers"));
             let totalRevenue = 0;
-
             if (data.is_sales_run) {
-                for (let i = 0; i < productIds.length; i++) {
-                    const productRef = doc(db, 'products', productIds[i]);
-                    const productDoc = await transaction.get(productRef);
-                    if (productDoc.exists()) {
-                        totalRevenue += (productDoc.data().price || 0) * data.items[i].quantity;
+                for (let i = 0; i < productDocs.length; i++) {
+                    const productData = productDocs[i].data();
+                    if (productData) {
+                        totalRevenue += (productData.price || 0) * data.items[i].quantity;
                     }
                 }
             }
 
+            for (let i = 0; i < productDocs.length; i++) {
+                const requestedQuantity = data.items[i].quantity;
+                transaction.update(productRefs[i], { stock: increment(-requestedQuantity) });
+            }
+            
+            const transferRef = doc(collection(db, "transfers"));
             transaction.set(transferRef, {
                 ...data,
                 from_staff_id: user.staff_id,
