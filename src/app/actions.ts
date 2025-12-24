@@ -1,4 +1,5 @@
 
+
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
@@ -1474,7 +1475,7 @@ export type PaymentConfirmation = {
 };
 
 
-export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmation, 'date'> & { date: string }[]> {
+export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> {
   try {
     const q = query(
       collection(db, 'payment_confirmations'),
@@ -1486,8 +1487,8 @@ export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmatio
         return { 
             id: docSnap.id,
              ...data,
-            date: (data.date as Timestamp).toDate().toISOString(),
-        } as Omit<PaymentConfirmation, 'date'> & { date: string };
+            date: data.date, // Keep as Timestamp
+        } as PaymentConfirmation;
     });
   } catch (error) {
     console.error("Error fetching payment confirmations:", error);
@@ -1507,12 +1508,12 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (confirmationData.status !== 'pending') throw new Error("This confirmation has already been processed.");
             
             const newStatus = action === 'approve' ? 'approved' : 'declined';
+            const approvalTimestamp = serverTimestamp();
             
             if (action === 'approve') {
-                const approvalTimestamp = serverTimestamp();
                 
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDate = new Date(confirmationData.date);
+                    const salesDate = new Date(confirmationData.date.toDate());
                     if (isNaN(salesDate.getTime())) { 
                         throw new Error("Invalid date found in payment confirmation record.");
                     }
@@ -2392,24 +2393,23 @@ export async function getSalesRunDetails(runId: string): Promise<SalesRun | null
         if (!runDoc.exists()) {
             return null;
         }
-
         const data = runDoc.data();
-        const totalRevenue = data.totalRevenue || 0;
         
-        const ordersQuery = query(collection(db, 'orders'), where('salesRunId', '==', runId));
-        const ordersSnapshot = await getDocs(ordersQuery);
-        
-        const totalCollected = ordersSnapshot.docs
-            .filter(doc => doc.data().paymentMethod !== 'Credit')
-            .reduce((sum, doc) => sum + doc.data().total, 0);
-            
+        const approvedPaymentsQuery = query(
+            collection(db, "payment_confirmations"),
+            where("runId", "==", runId),
+            where("status", "==", "approved")
+        );
+        const paymentsSnapshot = await getDocs(approvedPaymentsQuery);
+        const totalCollected = paymentsSnapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
+
         const itemsWithPrices = await Promise.all(
           (data.items || []).map(async (item: any) => {
             const productDoc = await getDoc(doc(db, 'products', item.productId));
             const productData = productDoc.exists() ? productDoc.data() : { price: 0, costPrice: 0, minPrice: 0, maxPrice: 0, name: 'Unknown Product' };
             return { 
                 ...item,
-                productName: productData.name, // Always use the current product name
+                productName: productData.name,
                 price: productData.price,
                 costPrice: productData.costPrice,
                 minPrice: productData.minPrice,
@@ -2418,6 +2418,7 @@ export async function getSalesRunDetails(runId: string): Promise<SalesRun | null
           })
         );
         
+        const totalRevenue = itemsWithPrices.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const totalOutstanding = totalRevenue - totalCollected;
 
         return {
@@ -2484,6 +2485,7 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
 
         ordersSnapshot.docs.forEach(docSnap => {
             const order = docSnap.data();
+            if (order.status !== 'Completed') return;
             
             const customerId = order.customerId || 'walk-in';
             const customerName = order.customerName || 'Walk-in';
@@ -2492,12 +2494,9 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
                 salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
             }
             
-            // Only add to "sold" if the order is completed
-            if (order.status === 'Completed') {
-                salesByCustomer[customerId].totalSold += order.total;
-                if (order.paymentMethod !== 'Credit') {
-                    salesByCustomer[customerId].totalPaid += order.total;
-                }
+            salesByCustomer[customerId].totalSold += order.total;
+            if (order.paymentMethod !== 'Credit') {
+                salesByCustomer[customerId].totalPaid += order.total;
             }
         });
 
@@ -2554,19 +2553,21 @@ type SaleData = {
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-            const newOrderRef = doc(collection(db, 'orders'));
+            // --- READS FIRST ---
+            const runRef = doc(db, 'transfers', data.runId);
+            const staffRef = doc(db, 'staff', data.staffId);
+            const customerRef = data.customerId !== 'walk-in' ? doc(db, 'customers', data.customerId) : null;
             
-            const runDoc = await transaction.get(doc(db, 'transfers', data.runId));
+            const [runDoc, staffDoc, customerDoc] = await Promise.all([
+                transaction.get(runRef),
+                transaction.get(staffRef),
+                customerRef ? transaction.get(customerRef) : Promise.resolve(null)
+            ]);
+            
             if (!runDoc.exists()) throw new Error("Sales run not found.");
-
-            const staffDoc = await transaction.get(doc(db, 'staff', data.staffId));
-            const driverName = staffDoc.exists() ? staffDoc.data().name : 'Unknown';
-
-            if (data.customerId !== 'walk-in') {
-                const customerDoc = await transaction.get(doc(db, 'customers', data.customerId));
-                if (!customerDoc.exists()) throw new Error("Customer not found.");
-            }
-
+            if (!staffDoc.exists()) throw new Error("Operating staff not found.");
+            if (customerRef && !customerDoc?.exists()) throw new Error("Customer not found.");
+            
             for (const item of data.items) {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
@@ -2574,7 +2575,11 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     throw new Error(`Not enough stock for ${item.name}.`);
                 }
             }
-            
+
+            // --- WRITES SECOND ---
+            const newOrderRef = doc(collection(db, 'orders'));
+            const driverName = staffDoc.data().name;
+
             const newOrderData = {
                 salesRunId: data.runId,
                 customerId: data.customerId,
@@ -2592,8 +2597,8 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
             };
 
             if(data.paymentMethod === 'Credit') {
+                if (!customerRef) throw new Error("Cannot make a credit sale to a walk-in customer.");
                 newOrderData.status = 'Completed';
-                const customerRef = doc(db, 'customers', data.customerId);
                 transaction.update(customerRef, { amountOwed: increment(data.total) });
             } else {
                  const confirmationRef = doc(collection(db, 'payment_confirmations'));
@@ -2645,10 +2650,7 @@ type PosSaleData = {
 export async function handlePosSale(data: PosSaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-            const newOrderRef = doc(collection(db, 'orders'));
-            const confirmationRef = doc(collection(db, 'payment_confirmations'));
-            
-            // --- READS ---
+             // --- READS FIRST ---
             for (const item of data.items) {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
@@ -2657,7 +2659,10 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 }
             }
 
-            // --- WRITES ---
+            // --- WRITES SECOND ---
+            const newOrderRef = doc(collection(db, 'orders'));
+            const confirmationRef = doc(collection(db, 'payment_confirmations'));
+
             for (const item of data.items) {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 transaction.update(stockRef, { stock: increment(-item.quantity) });
@@ -3328,3 +3333,5 @@ export async function returnUnusedIngredients(
 
 
   
+
+      
