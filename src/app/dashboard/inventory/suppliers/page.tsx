@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle, Loader2, Search, ArrowLeft, Wallet, ArrowRightLeft, Calendar as CalendarIcon } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, Search, ArrowLeft, Wallet, ArrowRightLeft, Calendar as CalendarIcon, SquareTerminal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -317,7 +317,7 @@ function LogPaymentDialog({ supplier, user, onPaymentLogged, disabled }: { suppl
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [amount, setAmount] = useState<number | string>('');
-    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Paystack'>('Cash');
+    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'POS'>('Cash');
     const [customerEmail, setCustomerEmail] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -351,47 +351,14 @@ function LogPaymentDialog({ supplier, user, onPaymentLogged, disabled }: { suppl
         }
 
         setIsSubmitting(true);
-        if (paymentMethod === 'Cash') {
+        if (paymentMethod === 'Cash' || paymentMethod === 'POS') {
             const result = await handleLogPayment(supplier.id, paymentAmount);
             if (result.success) {
-                toast({ title: 'Success', description: 'Cash payment logged successfully.' });
+                toast({ title: 'Success', description: `${paymentMethod} payment logged successfully.` });
                 onPaymentLogged();
                 setIsOpen(false);
             } else {
                 toast({ variant: 'destructive', title: 'Error', description: result.error });
-            }
-        } else { // Paystack
-            const loadingToast = toast({ title: "Initializing Payment...", description: "Please wait.", duration: Infinity });
-            const paystackResult = await initializePaystackTransaction({
-                email: customerEmail || user.email,
-                total: paymentAmount,
-                customerName: supplier.name,
-                staffId: user.staff_id,
-                items: [],
-            });
-            loadingToast.dismiss();
-
-            if (paystackResult.success && paystackResult.reference) {
-                const PaystackPop = (await import('@paystack/inline-js')).default;
-                const paystack = new PaystackPop();
-                paystack.newTransaction({
-                    key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
-                    email: customerEmail || user.email,
-                    amount: Math.round(paymentAmount * 100),
-                    ref: paystackResult.reference,
-                    onSuccess: async () => {
-                        const result = await handleLogPayment(supplier.id, paymentAmount);
-                        if (result.success) {
-                            toast({ title: 'Payment Successful', description: 'Paystack payment recorded.' });
-                            onPaymentLogged();
-                        } else {
-                             toast({ variant: 'destructive', title: 'Payment Error', description: 'Payment succeeded but failed to log. Please contact support.' });
-                        }
-                    },
-                    onClose: () => toast({ variant: 'destructive', title: 'Payment Cancelled' })
-                });
-            } else {
-                toast({ variant: 'destructive', title: 'Error', description: paystackResult.error });
             }
         }
         setIsSubmitting(false);
@@ -418,16 +385,10 @@ function LogPaymentDialog({ supplier, user, onPaymentLogged, disabled }: { suppl
                             <SelectTrigger><SelectValue/></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Cash"><Wallet className="mr-2 h-4 w-4"/>Cash</SelectItem>
-                                <SelectItem value="Paystack"><ArrowRightLeft className="mr-2 h-4 w-4"/>Paystack</SelectItem>
+                                <SelectItem value="POS"><SquareTerminal className="mr-2 h-4 w-4"/>POS</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
-                    {paymentMethod === 'Paystack' && (
-                        <div className="space-y-2">
-                            <Label htmlFor="supplier-email">Supplier Email (for receipt)</Label>
-                            <Input id="supplier-email" type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="supplier@email.com" />
-                        </div>
-                    )}
                     <div className="space-y-2">
                         <Label htmlFor="payment-amount">Amount Paid (₦)</Label>
                         <Input id="payment-amount" type="number" value={amount} onChange={handleAmountChange} />
