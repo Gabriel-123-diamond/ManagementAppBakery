@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -31,8 +30,7 @@ function Calendar({
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium hidden",
-        caption_dropdowns: "flex gap-2",
+        caption_label: "text-sm font-medium",
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -65,65 +63,6 @@ function Calendar({
       components={{
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
-        Dropdown: ({ value, onChange, children, ...props_ }) => {
-            const options = React.Children.toArray(children) as React.ReactElement<React.HTMLProps<HTMLOptionElement>>[];
-            const currentYear = new Date().getFullYear();
-            const selectedValue = options.find((child) => child.props.value === value);
-            const handleChange = (value: string) => {
-              const changeEvent = {
-                target: { value },
-              } as React.ChangeEvent<HTMLSelectElement>;
-              onChange?.(changeEvent);
-            };
-            
-            if (props_.name === 'months') {
-                const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
-                return (
-                     <Select
-                        value={value?.toString()}
-                        onValueChange={(value) => {
-                            const newMonth = new Date(props.month || new Date());
-                            newMonth.setMonth(parseInt(value));
-                            handleMonthChange(newMonth);
-                        }}
-                    >
-                        <SelectTrigger className="w-[120px]">
-                            <SelectValue>{months[props.month?.getMonth() ?? 0]}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                             {months.map((month, i) => (
-                                <SelectItem key={month} value={i.toString()}>{month}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )
-            }
-             if (props_.name === 'years') {
-                const fromYear = props.fromYear || currentYear - 10;
-                const toYear = props.toYear || currentYear + 10;
-                const yearOptions = Array.from({length: toYear - fromYear + 1}, (_, i) => fromYear + i);
-                 return (
-                     <Select
-                        value={value?.toString()}
-                         onValueChange={(value) => {
-                            const newMonth = new Date(props.month || new Date());
-                            newMonth.setFullYear(parseInt(value));
-                            handleMonthChange(newMonth);
-                        }}
-                    >
-                        <SelectTrigger className="w-[80px]">
-                            <SelectValue>{selectedValue?.props?.children}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {yearOptions.map((year) => (
-                                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )
-            }
-            return null;
-        }
       }}
       {...props}
     />
