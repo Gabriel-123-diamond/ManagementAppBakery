@@ -27,14 +27,28 @@ export function DateRangeWithInputs({
   onDateChange,
   align,
 }: DateRangePickerProps) {
+  const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
+  const [isOpen, setIsOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    setTempDate(date)
+  }, [date])
+
+  const handleApply = () => {
+    onDateChange(tempDate)
+    setIsOpen(false)
+  }
+
+  // function to reset the date
   const resetDate = (e: React.MouseEvent) => {
     e.stopPropagation()
     onDateChange(undefined)
+    setTempDate(undefined)
   }
 
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date"
@@ -66,17 +80,18 @@ export function DateRangeWithInputs({
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align={align || "start"}>
           <div className="flex flex-col gap-4 p-4">
+            {/* This is the "From / To" Input Section */}
             <div className="flex gap-4">
                 <div className="flex flex-col gap-2 w-full">
                     <span className="text-xs font-medium text-muted-foreground uppercase">From</span>
                     <div className="flex h-10 w-[140px] items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm ring-offset-background text-muted-foreground">
-                        {date?.from ? format(date.from, "MM/dd/yyyy") : "MM/DD/YYYY"}
+                        {tempDate?.from ? format(tempDate.from, "MM/dd/yyyy") : "MM/DD/YYYY"}
                     </div>
                 </div>
                 <div className="flex flex-col gap-2 w-full">
                     <span className="text-xs font-medium text-muted-foreground uppercase">To</span>
                     <div className="flex h-10 w-[140px] items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm ring-offset-background text-muted-foreground">
-                        {date?.to ? format(date.to, "MM/dd/yyyy") : "MM/DD/YYYY"}
+                        {tempDate?.to ? format(tempDate.to, "MM/dd/yyyy") : "MM/DD/YYYY"}
                     </div>
                 </div>
             </div>
@@ -85,12 +100,16 @@ export function DateRangeWithInputs({
                 <Calendar
                     initialFocus
                     mode="range"
-                    defaultMonth={date?.from}
-                    selected={date}
-                    onSelect={onDateChange}
+                    defaultMonth={tempDate?.from}
+                    selected={tempDate}
+                    onSelect={setTempDate}
                     numberOfMonths={1}
                 />
             </div>
+          </div>
+           <div className="flex justify-end gap-2 p-4 border-t">
+              <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
+              <Button onClick={handleApply}>Apply</Button>
           </div>
         </PopoverContent>
       </Popover>
