@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Calendar as CalendarIcon, X } from "lucide-react"
 import { DateRange } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
@@ -17,85 +17,83 @@ import {
 interface DateRangePickerProps extends React.HTMLAttributes<HTMLDivElement> {
   date: DateRange | undefined
   onDateChange: (date: DateRange | undefined) => void
+  align?: "start" | "center" | "end"
+  className?: string
 }
 
 export function DateRangeWithInputs({
   className,
   date,
   onDateChange,
+  align,
 }: DateRangePickerProps) {
-  const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
-  const [fromOpen, setFromOpen] = React.useState(false)
-  const [toOpen, setToOpen] = React.useState(false)
-
-  React.useEffect(() => {
-    setTempDate(date)
-  }, [date])
-
-  const handleApply = () => {
-    onDateChange(tempDate)
+  const resetDate = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onDateChange(undefined)
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Popover open={fromOpen} onOpenChange={setFromOpen}>
+    <div className={cn("grid gap-2", className)}>
+      <Popover>
         <PopoverTrigger asChild>
           <Button
-            id="date-from"
+            id="date"
             variant={"outline"}
             className={cn(
-              "w-[150px] justify-start text-left font-normal",
-              !tempDate?.from && "text-muted-foreground"
+              "w-full sm:w-[300px] justify-start text-left font-normal",
+              !date && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {tempDate?.from ? format(tempDate.from, "LLL dd, y") : <span>From</span>}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            initialFocus
-            mode="single"
-            selected={tempDate?.from}
-            onSelect={(day) => {
-              setTempDate(prev => ({ from: day, to: prev?.to }));
-              setFromOpen(false);
-            }}
-            disabled={{ after: tempDate?.to }}
-            numberOfMonths={1}
-          />
-        </PopoverContent>
-      </Popover>
-
-      <Popover open={toOpen} onOpenChange={setToOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id="date-to"
-            variant={"outline"}
-            className={cn(
-              "w-[150px] justify-start text-left font-normal",
-              !tempDate?.to && "text-muted-foreground"
+            {date?.from ? (
+              date.to ? (
+                <>
+                  {format(date.from, "LLL dd, y")} -{" "}
+                  {format(date.to, "LLL dd, y")}
+                </>
+              ) : (
+                format(date.from, "LLL dd, y")
+              )
+            ) : (
+              <span>Filter by date range</span>
             )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {tempDate?.to ? format(tempDate.to, "LLL dd, y") : <span>To</span>}
+            {date && (
+                <div onClick={resetDate} className="ml-auto hover:bg-secondary rounded-full p-1 cursor-pointer">
+                    <X className="h-3 w-3" />
+                </div>
+            )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            initialFocus
-            mode="single"
-            selected={tempDate?.to}
-            onSelect={(day) => {
-              setTempDate(prev => ({ from: prev?.from, to: day }));
-              setToOpen(false);
-            }}
-            disabled={{ before: tempDate?.from }}
-            numberOfMonths={1}
-          />
+        <PopoverContent className="w-auto p-0" align={align || "start"}>
+          <div className="flex flex-col gap-4 p-4">
+            <div className="flex gap-4">
+                <div className="flex flex-col gap-2 w-full">
+                    <span className="text-xs font-medium text-muted-foreground uppercase">From</span>
+                    <div className="flex h-10 w-[140px] items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm ring-offset-background text-muted-foreground">
+                        {date?.from ? format(date.from, "MM/dd/yyyy") : "MM/DD/YYYY"}
+                    </div>
+                </div>
+                <div className="flex flex-col gap-2 w-full">
+                    <span className="text-xs font-medium text-muted-foreground uppercase">To</span>
+                    <div className="flex h-10 w-[140px] items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm ring-offset-background text-muted-foreground">
+                        {date?.to ? format(date.to, "MM/dd/yyyy") : "MM/DD/YYYY"}
+                    </div>
+                </div>
+            </div>
+            
+            <div className="border rounded-md">
+                <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={date?.from}
+                    selected={date}
+                    onSelect={onDateChange}
+                    numberOfMonths={1}
+                />
+            </div>
+          </div>
         </PopoverContent>
       </Popover>
-      <Button onClick={handleApply}>Apply</Button>
     </div>
   )
 }
