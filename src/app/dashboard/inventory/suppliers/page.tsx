@@ -221,107 +221,6 @@ function SupplierDialog({
     );
 }
 
-function SupplyLogDialog({
-    isOpen,
-    onOpenChange,
-    onSave,
-    supplier,
-    ingredients,
-    user
-} : {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSave: (log: Omit<SupplyLog, 'id' | 'supplierName'>, user: User) => void;
-    supplier: Supplier;
-    ingredients: Ingredient[];
-    user: User | null;
-}) {
-    const [ingredientId, setIngredientId] = useState("");
-    const [quantity, setQuantity] = useState(0);
-    const [costPerUnit, setCostPerUnit] = useState(0);
-    const [invoiceNumber, setInvoiceNumber] = useState("");
-    const { toast } = useToast();
-
-    const selectedIngredient = useMemo(() => ingredients.find(i => i.id === ingredientId), [ingredientId, ingredients]);
-    
-    useEffect(() => {
-        if(selectedIngredient) {
-            setCostPerUnit(selectedIngredient.costPerUnit || 0);
-        }
-    }, [selectedIngredient]);
-    
-    const handleSubmit = () => {
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Error', description: 'User not found.'});
-            return;
-        }
-        if (!ingredientId || !quantity || !costPerUnit) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please fill all required fields.'});
-            return;
-        }
-        
-        const totalCost = quantity * costPerUnit;
-
-        onSave({
-            supplierId: supplier.id,
-            ingredientId,
-            ingredientName: selectedIngredient?.name || '',
-            quantity,
-            unit: selectedIngredient?.unit || '',
-            costPerUnit,
-            totalCost,
-            date: serverTimestamp(),
-            invoiceNumber
-        }, user);
-        onOpenChange(false);
-    }
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogTrigger asChild>
-                <Button>
-                    <PlusCircle className="mr-2 h-4 w-4"/> Add Supply Log
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Add Supply Log for {supplier.name}</DialogTitle>
-                    <DialogDescription>Record a new delivery of ingredients from this supplier.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="ingredient">Ingredient</Label>
-                        <Select value={ingredientId} onValueChange={setIngredientId}>
-                            <SelectTrigger><SelectValue placeholder="Select an ingredient"/></SelectTrigger>
-                            <SelectContent>
-                                {ingredients.map(ing => (
-                                    <SelectItem key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="quantity">Quantity Received</Label>
-                        <Input id="quantity" type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="costPerUnit">Cost Per Unit (₦)</Label>
-                        <Input id="costPerUnit" type="number" value={costPerUnit} onChange={(e) => setCostPerUnit(Number(e.target.value))} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="invoiceNumber">Invoice Number (Optional)</Label>
-                        <Input id="invoiceNumber" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit}>Save Log & Update Stock</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
 function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: Supplier, onPaymentLogged: () => void, disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
@@ -361,7 +260,7 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
                 <DialogHeader>
                     <DialogTitle>Log Payment to {supplier.name}</DialogTitle>
                     <DialogDescription>
-                        Outstanding Balance: <span className="font-bold text-destructive">₦{(supplier.amountOwed - supplier.amountPaid).toLocaleString()}</span>
+                        Outstanding Balance: <span className="font-bold text-destructive">{formatCurrency(supplier.amountOwed - supplier.amountPaid)}</span>
                     </DialogDescription>
                 </DialogHeader>
                  <div className="py-4">
@@ -394,7 +293,7 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
 }
 
 function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
-    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
+    const [tempDate, setTempDate] = useState<DateRange | undefined>();
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {
@@ -459,17 +358,12 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
     const [searchTerm, setSearchTerm] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
     
-    const canManageSupplies = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper';
     const canLogPayments = user?.role === 'Accountant' || user?.role === 'Developer';
     const isReadOnly = user?.role === 'Manager';
 
     const fetchDetails = useCallback(async () => {
         if (!user) return;
         setIsLoading(true);
-
-        const ingredientsCollection = collection(db, "ingredients");
-        const ingredientSnapshot = await getDocs(ingredientsCollection);
-        setIngredients(ingredientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ingredient[]);
 
         const supplyLogsQuery = query(collection(db, 'supply_logs'), where('supplierId', '==', supplier.id));
         const supplyLogsSnapshot = await getDocs(supplyLogsQuery);
@@ -548,37 +442,6 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
             return searchMatch && dateMatch;
         });
     }, [transactions, searchTerm, date]);
-
-    const handleSaveLog = async (logData: Omit<SupplyLog, 'id' | 'supplierName'>, user: User) => {
-        try {
-            const batch = writeBatch(db);
-
-            const logRef = doc(collection(db, 'supply_logs'));
-            batch.set(logRef, { ...logData, supplierName: supplier.name });
-            
-            const ingredientRef = doc(db, 'ingredients', logData.ingredientId);
-            batch.update(ingredientRef, { stock: increment(logData.quantity) });
-
-            const supplierRef = doc(db, 'suppliers', supplier.id);
-            batch.update(supplierRef, { amountOwed: increment(logData.totalCost) });
-            
-            await addDirectCost({
-                description: `Purchase of ${logData.ingredientName} from ${supplier.name}`,
-                category: 'Ingredients',
-                quantity: logData.quantity,
-                total: logData.totalCost,
-            })
-
-            await batch.commit();
-            
-            fetchDetails();
-
-            toast({ title: "Success", description: "Supply log saved and stock updated."});
-        } catch(error) {
-            console.error("Error saving supply log:", error);
-            toast({ variant: "destructive", title: "Error", description: "Failed to save supply log." });
-        }
-    }
     
     return (
         <div className="space-y-4">
@@ -591,29 +454,18 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                  <CardContent className="grid md:grid-cols-3 gap-4">
                     <Card>
                         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Billed</CardTitle></CardHeader>
-                        <CardContent><p className="text-2xl font-bold">₦{supplier.amountOwed.toLocaleString()}</p></CardContent>
+                        <CardContent><p className="text-2xl font-bold">{formatCurrency(supplier.amountOwed)}</p></CardContent>
                     </Card>
                      <Card>
                         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Paid</CardTitle></CardHeader>
-                        <CardContent><p className="text-2xl font-bold text-green-500">₦{supplier.amountPaid.toLocaleString()}</p></CardContent>
+                        <CardContent><p className="text-2xl font-bold text-green-500">{formatCurrency(supplier.amountPaid)}</p></CardContent>
                     </Card>
                      <Card>
                         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Outstanding Balance</CardTitle></CardHeader>
-                        <CardContent><p className="text-2xl font-bold text-destructive">₦{(supplier.amountOwed - supplier.amountPaid).toLocaleString()}</p></CardContent>
+                        <CardContent><p className="text-2xl font-bold text-destructive">{formatCurrency(supplier.amountOwed - supplier.amountPaid)}</p></CardContent>
                     </Card>
                 </CardContent>
             </Card>
-            
-            {canManageSupplies && (
-              <SupplyLogDialog 
-                  isOpen={isLogDialogOpen}
-                  onOpenChange={setIsLogDialogOpen}
-                  onSave={handleSaveLog}
-                  supplier={supplier}
-                  ingredients={ingredients}
-                  user={user}
-              />
-            )}
 
             <Card>
                 <CardHeader>
@@ -630,11 +482,6 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                            <DateRangeFilter date={date} setDate={setDate} />
                             {canLogPayments && user && (
                                 <LogPaymentDialog supplier={supplier} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
-                            )}
-                            {canManageSupplies && !canLogPayments && (
-                              <Button onClick={() => setIsLogDialogOpen(true)} disabled={isReadOnly}>
-                                  <PlusCircle className="mr-2 h-4 w-4"/> Add Supply Log
-                              </Button>
                             )}
                         </div>
                     </div>
@@ -658,9 +505,9 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                                     <TableRow key={index}>
                                         <TableCell>{format(log.date, 'Pp')}</TableCell>
                                         <TableCell>{log.description}</TableCell>
-                                        <TableCell className="text-right text-red-500">{log.debit ? `₦${log.debit.toLocaleString()}`: '-'}</TableCell>
-                                        <TableCell className="text-right text-green-500">{log.credit ? `₦${log.credit.toLocaleString()}` : '-'}</TableCell>
-                                        <TableCell className="text-right font-bold">₦{log.balance.toLocaleString()}</TableCell>
+                                        <TableCell className="text-right text-red-500">{log.debit ? formatCurrency(log.debit): '-'}</TableCell>
+                                        <TableCell className="text-right text-green-500">{log.credit ? formatCurrency(log.credit) : '-'}</TableCell>
+                                        <TableCell className="text-right font-bold">{formatCurrency(log.balance)}</TableCell>
                                     </TableRow>
                                 ))
                             ) : (
@@ -829,11 +676,11 @@ export default function SuppliersPage() {
                                         <TableCell className="font-medium">{supplier.name}</TableCell>
                                         <TableCell>{supplier.contactPerson}</TableCell>
                                         <TableCell>{supplier.phone}</TableCell>
-                                        {!isStorekeeper && <TableCell>₦{supplier.amountOwed.toFixed(2)}</TableCell>}
-                                        {!isStorekeeper && <TableCell>₦{supplier.amountPaid.toFixed(2)}</TableCell>}
+                                        {!isStorekeeper && <TableCell>{formatCurrency(supplier.amountOwed)}</TableCell>}
+                                        {!isStorekeeper && <TableCell>{formatCurrency(supplier.amountPaid)}</TableCell>}
                                         {!isStorekeeper && 
                                             <TableCell className={supplier.amountRemaining > 0 ? 'text-destructive' : 'text-green-600'}>
-                                                ₦{supplier.amountRemaining.toFixed(2)}
+                                                {formatCurrency(supplier.amountRemaining)}
                                             </TableCell>
                                         }
                                         <TableCell>
