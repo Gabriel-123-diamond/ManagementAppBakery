@@ -2,11 +2,10 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker, MonthChangeEventHandler } from "react-day-picker"
+import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -16,12 +15,6 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
-  const handleMonthChange: MonthChangeEventHandler = (month) => {
-    if (props.onMonthChange) {
-      props.onMonthChange(month);
-    }
-  };
-
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
