@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
@@ -1811,7 +1812,7 @@ function SalesRunDetailsPageClientContent() {
                         <TableBody>
                             {run.items.map(item => {
                                 const soldQty = orders.filter(o => o.status === 'Completed').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
-                                const pendingSaleQty = orders.filter(o => o.status === 'Awaiting Payment Approval').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
+                                const pendingSaleQty = orders.filter(o => o.status === 'Pending').flatMap(o => o.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
                                 const pendingReturnQty = pendingReturns.flatMap(pr => pr.items).filter(i => i.productId === item.productId).reduce((sum, i) => sum + i.quantity, 0);
                                 const netRemaining = item.quantity - soldQty - pendingReturnQty - pendingSaleQty;
                                 const fullProduct = allProducts.find(p => p.id === item.productId);

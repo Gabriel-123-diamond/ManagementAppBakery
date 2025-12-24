@@ -2608,7 +2608,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 date: serverTimestamp(),
                 staffId: data.staffId,
                 staffName: staffDoc.data().name,
-                status: 'Awaiting Payment Approval', // Corrected Status
+                status: 'Pending',
                 id: newOrderRef.id,
             };
 
@@ -2691,7 +2691,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 date: serverTimestamp(),
                 staffId: data.staffId,
                 staffName: data.staffName,
-                status: 'Awaiting Payment Approval', // Corrected Status
+                status: 'Pending',
             };
             
             transaction.set(newOrderRef, orderData);
@@ -3370,3 +3370,4 @@ export async function returnUnusedIngredients(
   
 
       
+
