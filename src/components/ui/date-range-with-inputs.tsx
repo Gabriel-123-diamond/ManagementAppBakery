@@ -14,41 +14,42 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
-interface DateRangeWithInputsProps {
+interface DateRangePickerProps extends React.HTMLAttributes<HTMLDivElement> {
   date: DateRange | undefined
   onDateChange: (date: DateRange | undefined) => void
-  className?: string
 }
 
 export function DateRangeWithInputs({
   className,
-  date: finalDate,
+  date,
   onDateChange,
-}: DateRangeWithInputsProps) {
-  const [tempDate, setTempDate] = React.useState<DateRange | undefined>(finalDate)
+}: DateRangePickerProps) {
+  const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
+  const [fromOpen, setFromOpen] = React.useState(false)
+  const [toOpen, setToOpen] = React.useState(false)
 
   React.useEffect(() => {
-    setTempDate(finalDate)
-  }, [finalDate])
+    setTempDate(date)
+  }, [date])
 
   const handleApply = () => {
     onDateChange(tempDate)
   }
 
   return (
-    <div className={cn("flex flex-col sm:flex-row items-center gap-2", className)}>
-      <Popover>
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+      <Popover open={fromOpen} onOpenChange={setFromOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date-from"
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal",
+              "w-[150px] justify-start text-left font-normal",
               !tempDate?.from && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {tempDate?.from ? format(tempDate.from, "PPP") : <span>From</span>}
+            {tempDate?.from ? format(tempDate.from, "LLL dd, y") : <span>From</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -56,24 +57,28 @@ export function DateRangeWithInputs({
             initialFocus
             mode="single"
             selected={tempDate?.from}
-            onSelect={(day) => setTempDate(prev => ({ from: day, to: prev?.to }))}
+            onSelect={(day) => {
+              setTempDate(prev => ({ from: day, to: prev?.to }));
+              setFromOpen(false);
+            }}
+            disabled={{ after: tempDate?.to }}
             numberOfMonths={1}
           />
         </PopoverContent>
       </Popover>
 
-      <Popover>
+      <Popover open={toOpen} onOpenChange={setToOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date-to"
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal",
+              "w-[150px] justify-start text-left font-normal",
               !tempDate?.to && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {tempDate?.to ? format(tempDate.to, "PPP") : <span>To</span>}
+            {tempDate?.to ? format(tempDate.to, "LLL dd, y") : <span>To</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -81,7 +86,10 @@ export function DateRangeWithInputs({
             initialFocus
             mode="single"
             selected={tempDate?.to}
-            onSelect={(day) => setTempDate(prev => ({ from: prev?.from, to: day }))}
+            onSelect={(day) => {
+              setTempDate(prev => ({ from: prev?.from, to: day }));
+              setToOpen(false);
+            }}
             disabled={{ before: tempDate?.from }}
             numberOfMonths={1}
           />
