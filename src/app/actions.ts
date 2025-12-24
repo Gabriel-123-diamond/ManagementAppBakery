@@ -1475,26 +1475,27 @@ export type PaymentConfirmation = {
 };
 
 
-export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmation, 'date'> & { date: string }[]> {
-  try {
-    const q = query(
-      collection(db, 'payment_confirmations'),
-      orderBy('date', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return { 
-            id: docSnap.id,
-             ...data,
-            date: (data.date as Timestamp).toDate().toISOString(),
-        } as Omit<PaymentConfirmation, 'date'> & { date: string };
-    });
-  } catch (error) {
-    console.error("Error fetching payment confirmations:", error);
-    return [];
-  }
+export async function getPaymentConfirmations(): Promise<(Omit<PaymentConfirmation, 'date'> & { date: string })[]> {
+    try {
+      const q = query(
+        collection(db, 'payment_confirmations'),
+        orderBy('date', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+          return { 
+              id: docSnap.id,
+              ...data,
+              date: (data.date as Timestamp).toDate().toISOString(),
+          } as Omit<PaymentConfirmation, 'date'> & { date: string };
+      });
+    } catch (error) {
+      console.error("Error fetching payment confirmations:", error);
+      return [];
+    }
 }
+  
 
 export async function handlePaymentConfirmation(confirmationId: string, action: 'approve' | 'decline'): Promise<{ success: boolean; error?: string }> {
     const confirmationRef = doc(db, 'payment_confirmations', confirmationId);
@@ -1513,7 +1514,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (action === 'approve') {
                 
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDate = new Date(confirmationData.date);
+                    const salesDate = new Date(confirmationData.date as any); // Use `as any` to bypass strict type checking for this conversion
                     if (isNaN(salesDate.getTime())) { 
                         throw new Error("Invalid date found in payment confirmation record.");
                     }
@@ -2389,7 +2390,9 @@ export async function getProductionLogs(): Promise<ProductionLog[]> {
 
 export async function getSalesRunDetails(runId: string): Promise<SalesRun | null> {
     try {
-        const runDoc = await getDoc(doc(db, 'transfers', runId));
+        const runDocRef = doc(db, 'transfers', runId);
+        const runDoc = await getDoc(runDocRef);
+
         if (!runDoc.exists()) {
             return null;
         }
@@ -2553,31 +2556,27 @@ type SaleData = {
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-            const runRef = doc(db, 'transfers', data.runId);
             const staffRef = doc(db, 'staff', data.staffId);
-            const customerRef = data.customerId !== 'walk-in' ? doc(db, 'customers', data.customerId) : null;
-            
-            const [runDoc, staffDoc, customerDoc] = await Promise.all([
-                transaction.get(runRef),
-                transaction.get(staffRef),
-                customerRef ? transaction.get(customerRef) : Promise.resolve(null)
-            ]);
-            
-            if (!runDoc.exists()) throw new Error("Sales run not found.");
+            const staffDoc = await transaction.get(staffRef);
             if (!staffDoc.exists()) throw new Error("Operating staff not found.");
-            if (customerRef && !customerDoc?.exists()) throw new Error("Customer not found.");
-            
+
+            let customerRef: any = null;
+            if (data.customerId !== 'walk-in') {
+                customerRef = doc(db, 'customers', data.customerId);
+                const customerDoc = await transaction.get(customerRef);
+                if (!customerDoc.exists()) throw new Error("Customer not found.");
+            }
+
             for (const item of data.items) {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
                 if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
                     throw new Error(`Not enough stock for ${item.name}.`);
                 }
+                transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
 
             const newOrderRef = doc(collection(db, 'orders'));
-            const driverName = staffDoc.data().name;
-
             const newOrderData = {
                 salesRunId: data.runId,
                 customerId: data.customerId,
@@ -2588,13 +2587,12 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 partialPayments: data.partialPayments || null,
                 date: serverTimestamp(),
                 staffId: data.staffId,
-                staffName: driverName,
+                staffName: staffDoc.data().name,
                 status: 'Pending',
                 id: newOrderRef.id,
-                isDebtPayment: false,
             };
 
-            if(data.paymentMethod === 'Credit') {
+            if (data.paymentMethod === 'Credit') {
                 if (!customerRef) throw new Error("Cannot make a credit sale to a walk-in customer.");
                 newOrderData.status = 'Completed';
                 transaction.update(customerRef, { amountOwed: increment(data.total) });
@@ -2608,7 +2606,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     items: data.items,
                     amount: data.total,
                     driverId: data.staffId,
-                    driverName: driverName,
+                    driverName: staffDoc.data().name,
                     date: serverTimestamp(),
                     status: 'pending',
                     paymentMethod: data.paymentMethod,
@@ -2618,16 +2616,10 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
 
             transaction.set(newOrderRef, newOrderData);
 
-            for (const item of data.items) {
-                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
-                transaction.update(stockRef, { stock: increment(-item.quantity) });
-            }
-
             return newOrderRef.id;
         });
 
         return { success: true, orderId };
-
     } catch (error) {
         console.error("Error selling to customer:", error);
         return { success: false, error: (error as Error).message };
@@ -2648,22 +2640,24 @@ type PosSaleData = {
 export async function handlePosSale(data: PosSaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-            for (const item of data.items) {
-                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
-                const stockDoc = await transaction.get(stockRef);
+            const stockRefs = data.items.map(item => doc(db, 'staff', data.staffId, 'personal_stock', item.productId));
+            const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+            for (let i = 0; i < stockDocs.length; i++) {
+                const stockDoc = stockDocs[i];
+                const item = data.items[i];
                 if (!stockDoc.exists() || (stockDoc.data()?.stock || 0) < item.quantity) {
                     throw new Error(`Not enough stock for ${item.name}. Available: ${stockDoc.data()?.stock || 0}, trying to sell: ${item.quantity}`);
                 }
             }
 
-            const newOrderRef = doc(collection(db, 'orders'));
-            const confirmationRef = doc(collection(db, 'payment_confirmations'));
-
-            for (const item of data.items) {
-                const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
-                transaction.update(stockRef, { stock: increment(-item.quantity) });
+            for (let i = 0; i < stockDocs.length; i++) {
+                 const stockRef = stockRefs[i];
+                 const item = data.items[i];
+                 transaction.update(stockRef, { stock: increment(-item.quantity) });
             }
 
+            const newOrderRef = doc(collection(db, 'orders'));
             const orderData = {
                 id: newOrderRef.id,
                 salesRunId: `pos-sale-${newOrderRef.id}`,
@@ -2681,6 +2675,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
             
             transaction.set(newOrderRef, orderData);
             
+            const confirmationRef = doc(collection(db, 'payment_confirmations'));
             transaction.set(confirmationRef, {
                 runId: `pos-sale-${newOrderRef.id}`,
                 orderId: newOrderRef.id,

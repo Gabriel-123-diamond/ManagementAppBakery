@@ -48,7 +48,7 @@ function RunCard({ run }: { run: SalesRunType }) {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const q = query(collection(db, 'orders'), where('salesRunId', '==', run.id));
+        const q = query(collection(db, 'orders'), where('salesRunId', '==', run.id), where('status', '==', 'Completed'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             let totalSold = 0;
             snapshot.forEach(doc => {
@@ -444,5 +444,3 @@ export default function DeliveriesPage() {
     
     return <DriverView user={user} />;
 }
-
-    
