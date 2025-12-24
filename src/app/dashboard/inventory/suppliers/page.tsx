@@ -278,6 +278,11 @@ function SupplyLogDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogTrigger asChild>
+                <Button>
+                    <PlusCircle className="mr-2 h-4 w-4"/> Add Supply Log
+                </Button>
+            </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Add Supply Log for {supplier.name}</DialogTitle>
@@ -347,7 +352,7 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
     
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
+             <DialogTrigger asChild>
                 <Button disabled={disabled}>
                     <PlusCircle className="mr-2 h-4 w-4"/> Log Payment
                 </Button>
@@ -389,8 +394,20 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
 }
 
 function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
+    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
+    const [isOpen, setIsOpen] = useState(false);
+
+    useEffect(() => {
+        setTempDate(date);
+    }, [date]);
+
+    const handleApply = () => {
+        setDate(tempDate);
+        setIsOpen(false);
+    }
+
     return (
-        <Popover>
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
             <Button
                 id="date"
@@ -419,11 +436,14 @@ function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | u
             <Calendar
                 initialFocus
                 mode="range"
-                defaultMonth={date?.from}
-                selected={date}
-                onSelect={setDate}
+                defaultMonth={tempDate?.from}
+                selected={tempDate}
+                onSelect={setTempDate}
                 numberOfMonths={2}
             />
+             <div className="p-2 border-t flex justify-end">
+                <Button onClick={handleApply}>Apply</Button>
+            </div>
             </PopoverContent>
         </Popover>
     )
@@ -439,7 +459,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
     const [searchTerm, setSearchTerm] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
     
-    const canManageSupplies = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper' || user?.role === 'Accountant';
+    const canManageSupplies = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper';
     const canLogPayments = user?.role === 'Accountant' || user?.role === 'Developer';
     const isReadOnly = user?.role === 'Manager';
 
@@ -451,11 +471,11 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
         const ingredientSnapshot = await getDocs(ingredientsCollection);
         setIngredients(ingredientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ingredient[]);
 
-        const supplyLogsQuery = query(collection(db, 'supply_logs'), where('supplierId', '==', supplier.id), orderBy('date', 'desc'));
+        const supplyLogsQuery = query(collection(db, 'supply_logs'), where('supplierId', '==', supplier.id));
         const supplyLogsSnapshot = await getDocs(supplyLogsQuery);
         const supplyLogs = supplyLogsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupplyLog));
         
-        const paymentsQuery = query(collection(db, 'indirectCosts'), where('category', '==', 'Creditor Payments'), where('description', '==', `Payment to supplier: ${supplier.name}`), orderBy('date', 'desc'));
+        const paymentsQuery = query(collection(db, 'indirectCosts'), where('category', '==', 'Creditor Payments'), where('description', '==', `Payment to supplier: ${supplier.name}`));
         const paymentLogsSnapshot = await getDocs(paymentsQuery);
         const paymentLogs = paymentLogsSnapshot.docs.map(doc => ({
             id: doc.id,
@@ -584,7 +604,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                 </CardContent>
             </Card>
             
-            {canManageSupplies && !isReadOnly && (
+            {canManageSupplies && (
               <SupplyLogDialog 
                   isOpen={isLogDialogOpen}
                   onOpenChange={setIsLogDialogOpen}
