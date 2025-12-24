@@ -410,56 +410,40 @@ function LogPaymentDialog({ supplier, user, onPaymentLogged, disabled }: { suppl
 function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack: () => void, user: User | null }) {
     const { toast } = useToast();
     const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-    const [supplyLogs, setSupplyLogs] = useState<SupplyLog[]>([]);
-    const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
+    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
+    const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
     
     const canManageSupplies = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper' || user?.role === 'Accountant';
     const canLogPayments = user?.role === 'Accountant' || user?.role === 'Developer';
     const isReadOnly = user?.role === 'Manager';
 
-
     const fetchDetails = useCallback(async () => {
         if (!user) return;
+        setIsLoading(true);
+
         const ingredientsCollection = collection(db, "ingredients");
         const ingredientSnapshot = await getDocs(ingredientsCollection);
         setIngredients(ingredientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ingredient[]);
 
         const supplyLogsQuery = query(collection(db, 'supply_logs'), where('supplierId', '==', supplier.id), orderBy('date', 'desc'));
-        const unsubSupplyLogs = onSnapshot(supplyLogsQuery, (snapshot) => {
-            setSupplyLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupplyLog)));
-        });
-
-        const paymentsQuery = query(collection(db, 'indirectCosts'), where('category', '==', 'Creditor Payments'), where('description', '==', `Payment to supplier: ${supplier.name}`), orderBy('date', 'desc'));
-        const unsubPaymentLogs = onSnapshot(paymentsQuery, (snapshot) => {
-            setPaymentLogs(snapshot.docs.map(doc => ({
-                id: doc.id,
-                supplierId: supplier.id,
-                amount: doc.data().amount,
-                date: doc.data().date,
-                description: doc.data().description,
-            } as PaymentLog)));
-        });
+        const supplyLogsSnapshot = await getDocs(supplyLogsQuery);
+        const supplyLogs = supplyLogsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupplyLog));
         
-         return () => {
-            unsubSupplyLogs();
-            unsubPaymentLogs();
-        };
-
-    }, [supplier.id, supplier.name, user]);
-    
-    useEffect(() => {
-       const unsubPromise = fetchDetails();
-       return () => {
-           unsubPromise.then(unsub => unsub && unsub());
-       }
-    }, [fetchDetails]);
-    
-    useEffect(() => {
+        const paymentsQuery = query(collection(db, 'indirectCosts'), where('category', '==', 'Creditor Payments'), where('description', '==', `Payment to supplier: ${supplier.name}`), orderBy('date', 'desc'));
+        const paymentLogsSnapshot = await getDocs(paymentsQuery);
+        const paymentLogs = paymentLogsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            supplierId: supplier.id,
+            amount: doc.data().amount,
+            date: doc.data().date,
+            description: doc.data().description,
+        } as PaymentLog));
+        
         const getDate = (log: any) => {
             if (!log.date) return new Date(0);
             if (log.date.toDate) return log.date.toDate();
@@ -474,35 +458,41 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
         
         combinedLogs.sort((a,b) => b.date - a.date);
 
-        const reversedLogs = [...combinedLogs].reverse();
-        let runningBalance = 0;
+        let runningBalance = supplier.amountOwed - supplier.amountPaid;
 
-        const calculatedTransactions = reversedLogs.map(log => {
+        const calculatedTransactions = combinedLogs.map(log => {
              if (log.type === 'supply') {
-                runningBalance += log.totalCost;
-                return {
+                const transaction = {
                     date: log.date,
                     description: `Supply: ${log.ingredientName}`,
                     debit: log.totalCost,
                     credit: null,
                     balance: runningBalance,
                 }
-            } else { 
-                runningBalance -= log.amount;
-                return {
+                runningBalance -= log.totalCost;
+                return transaction;
+            } else { // payment
+                const transaction = {
                     date: log.date,
                     description: 'Payment',
                     debit: null,
                     credit: log.amount,
                     balance: runningBalance,
                 }
+                runningBalance += log.amount;
+                return transaction;
             }
         });
         
-        setTransactions(calculatedTransactions.reverse());
-        if(isLoading) setIsLoading(false);
-    }, [supplyLogs, paymentLogs, isLoading]);
+        setTransactions(calculatedTransactions);
+        setIsLoading(false);
 
+    }, [supplier.id, supplier.name, user, supplier.amountOwed, supplier.amountPaid]);
+    
+    useEffect(() => {
+        fetchDetails();
+    }, [fetchDetails]);
+    
 
     const filteredTransactions = useMemo(() => {
         return transactions.filter(log => {
@@ -538,12 +528,19 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
             })
 
             await batch.commit();
+            
+            fetchDetails();
 
             toast({ title: "Success", description: "Supply log saved and stock updated."});
         } catch(error) {
             console.error("Error saving supply log:", error);
             toast({ variant: "destructive", title: "Error", description: "Failed to save supply log." });
         }
+    }
+
+    const handleDateApply = () => {
+      setDate(tempDate);
+      setIsDatePopoverOpen(false);
     }
     
     return (
@@ -593,15 +590,43 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                 <Input placeholder="Search logs..." className="pl-10 w-full sm:w-auto" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
-                            <Popover>
+                           <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
                                 <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-[240px] justify-start text-left font-normal", !date && "text-muted-foreground")}>
-                                        <CalendarIcon className="mr-2 h-4 w-4"/>
-                                        {date?.from ? (date.to ? `${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}` : format(date.from, "LLL dd, y")) : <span>Filter by date</span>}
-                                    </Button>
+                                <Button
+                                    id="date"
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-[260px] justify-start text-left font-normal",
+                                    !date && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {date?.from ? (
+                                    date.to ? (
+                                        <>
+                                        {format(date.from, "LLL dd, y")} -{" "}
+                                        {format(date.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(date.from, "LLL dd, y")
+                                    )
+                                    ) : (
+                                    <span>Filter by date range</span>
+                                    )}
+                                </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="end">
-                                    <Calendar mode="range" selected={date} onSelect={setDate} initialFocus />
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={tempDate?.from}
+                                    selected={tempDate}
+                                    onSelect={setTempDate}
+                                    numberOfMonths={2}
+                                />
+                                <div className="p-2 border-t flex justify-end">
+                                    <Button onClick={handleDateApply}>Apply</Button>
+                                </div>
                                 </PopoverContent>
                             </Popover>
                             {canLogPayments && user && (
@@ -661,23 +686,37 @@ export default function SuppliersPage() {
     const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
+    const fetchSuppliers = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const suppliersCollection = collection(db, "suppliers");
+            const snapshot = await getDocs(suppliersCollection);
+            const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Supplier[];
+            setSuppliers(list);
+        } catch (error) {
+            console.error("Error fetching suppliers:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not fetch suppliers." });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
+    
     useEffect(() => {
         const storedUser = localStorage.getItem('loggedInUser');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
         }
-        
-        const suppliersCollection = collection(db, "suppliers");
-        const unsubscribe = onSnapshot(suppliersCollection, (snapshot) => {
+
+        const unsub = onSnapshot(collection(db, "suppliers"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Supplier[];
             setSuppliers(list);
-            if (isLoading) setIsLoading(false);
+             if (isLoading) setIsLoading(false);
         }, (error) => {
-            console.error("Error fetching suppliers:", error);
+             console.error("Error fetching suppliers:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not fetch suppliers." });
         });
         
-        return () => unsubscribe();
+        return () => unsub();
     }, [toast, isLoading]);
 
     const handleSaveSupplier = async (supplierData: Omit<Supplier, 'id'>) => {
@@ -849,5 +888,3 @@ export default function SuppliersPage() {
         </div>
     );
 }
-
-    

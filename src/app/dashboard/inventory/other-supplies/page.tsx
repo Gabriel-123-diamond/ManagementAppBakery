@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -188,7 +187,7 @@ function SupplyDialog({
     );
 }
 
-function IncreaseSupplyDialog({ supplies, onStockIncreased }: { supplies: OtherSupply[], onStockIncreased: () => void }) {
+function IncreaseSupplyDialog({ supplies, onStockIncreased, disabled }: { supplies: OtherSupply[], onStockIncreased: () => void, disabled?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedSupplyId, setSelectedSupplyId] = useState('');
     const [quantity, setQuantity] = useState<number | ''>('');
@@ -249,7 +248,7 @@ function IncreaseSupplyDialog({ supplies, onStockIncreased }: { supplies: OtherS
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button>
+                <Button disabled={disabled}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Increase Supply Stock
                 </Button>
             </DialogTrigger>
@@ -386,12 +385,14 @@ export default function OtherSuppliesPage() {
         return filteredSupplies.reduce((acc, supply) => acc + (supply.stock * supply.costPerUnit), 0);
     }, [filteredSupplies]);
 
+    const isAccountant = user?.role === 'Accountant';
+
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold font-headline">Other Supplies</h1>
                 <div className="flex items-center gap-2">
-                    <IncreaseSupplyDialog supplies={supplies} onStockIncreased={fetchSupplies} />
+                    <IncreaseSupplyDialog supplies={supplies} onStockIncreased={fetchSupplies} disabled={isAccountant} />
                      <Button onClick={openAddDialog} variant="outline">
                         Add New Supply Type
                     </Button>
@@ -542,4 +543,3 @@ export default function OtherSuppliesPage() {
         </div>
     );
 }
-
