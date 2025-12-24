@@ -2630,7 +2630,7 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                     date: serverTimestamp(),
                     status: 'pending',
                     paymentMethod: data.paymentMethod,
-                    partialPayments: data.partialPayments,
+                    partialPayments: data.partialPayments || null,
                     isDebtPayment: false,
                 });
             }
@@ -2709,6 +2709,7 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 date: serverTimestamp(),
                 status: 'pending',
                 paymentMethod: data.paymentMethod,
+                partialPayments: data.partialPayments || null,
                 isDebtPayment: false,
             });
             return newOrderRef.id;

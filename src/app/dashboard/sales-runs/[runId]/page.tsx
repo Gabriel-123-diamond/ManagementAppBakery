@@ -1804,7 +1804,7 @@ function SalesRunDetailsPageClientContent() {
                                 <TableHead className="text-right">Sold</TableHead>
                                 <TableHead className="text-right">Returned (Pending)</TableHead>
                                 <TableHead className="text-right">Net Remaining</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                {user?.role === 'Developer' && <TableHead className="text-right">Actions</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1820,11 +1820,13 @@ function SalesRunDetailsPageClientContent() {
                                         <TableCell className="text-right">{soldQty}</TableCell>
                                         <TableCell className="text-right text-orange-500">{pendingReturnQty}</TableCell>
                                         <TableCell className="text-right font-bold">{netRemaining}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => setEditingProduct(fullProduct!)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
+                                        {user?.role === 'Developer' && (
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" onClick={() => setEditingProduct(fullProduct!)}>
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 );
                             })}
@@ -2055,5 +2057,3 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
-
-    
