@@ -116,6 +116,8 @@ type Transaction = {
     balance: number;
 }
 
+const formatCurrency = (amount?: number) => `₦${(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 function SupplierDialog({
   isOpen,
   onOpenChange,
