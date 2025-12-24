@@ -170,7 +170,7 @@ function StaffDialog({
                 <DialogHeader>
                     <DialogTitle>{staff?.staff_id ? `Edit ${staff.name}` : 'Add New Staff Member'}</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="name" className="text-right">Full Name</Label>
                         <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" />
@@ -351,10 +351,6 @@ export default function StaffManagementPage() {
 
     useEffect(() => {
         fetchStaff();
-        window.addEventListener('focus', fetchStaff);
-        return () => {
-            window.removeEventListener('focus', fetchStaff);
-        };
     }, [fetchStaff]);
 
     const handleSaveStaff = async (staffData: Omit<Staff, 'staff_id'>, staffId?: string) => {

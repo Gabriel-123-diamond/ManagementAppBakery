@@ -307,7 +307,7 @@ function LogDetailsDialog({ isOpen, onOpenChange, log, productionBatch, supplyLo
               <div>
                 <h4 className="font-semibold mb-2">Production Batch: {productionBatch.id.substring(0,6)}...</h4>
                 <div className="text-sm space-y-1 mb-2">
-                    <p><strong>Product:</strong> {productionBatch.productName} (x{productionBatch.quantityToProduce})</p>
+                    <p><strong>Recipe:</strong> {productionBatch.recipeName}</p>
                     <p><strong>Requested by:</strong> {productionBatch.requestedByName}</p>
                 </div>
                 <Separator className="my-2" />
