@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -61,6 +60,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
+import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
 
 type User = {
     name: string;
@@ -292,69 +292,10 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
     )
 }
 
-function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
-    const [tempDate, setTempDate] = useState<DateRange | undefined>();
-    const [isOpen, setIsOpen] = useState(false);
-
-    useEffect(() => {
-        setTempDate(date);
-    }, [date]);
-
-    const handleApply = () => {
-        setDate(tempDate);
-        setIsOpen(false);
-    }
-
-    return (
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-            <Button
-                id="date"
-                variant={"outline"}
-                className={cn(
-                "w-[260px] justify-start text-left font-normal",
-                !date && "text-muted-foreground"
-                )}
-            >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date?.from ? (
-                date.to ? (
-                    <>
-                    {format(date.from, "LLL dd, y")} -{" "}
-                    {format(date.to, "LLL dd, y")}
-                    </>
-                ) : (
-                    format(date.from, "LLL dd, y")
-                )
-                ) : (
-                <span>Filter by date range</span>
-                )}
-            </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align={align}>
-            <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={tempDate?.from}
-                selected={tempDate}
-                onSelect={setTempDate}
-                numberOfMonths={2}
-            />
-             <div className="p-2 border-t flex justify-end">
-                <Button onClick={handleApply}>Apply</Button>
-            </div>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
-
 function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack: () => void, user: User | null }) {
     const { toast } = useToast();
-    const [ingredients, setIngredients] = useState<Ingredient[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
     
@@ -479,7 +420,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                 <Input placeholder="Search logs..." className="pl-10 w-full sm:w-auto" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
-                           <DateRangeFilter date={date} setDate={setDate} />
+                           <DateRangeWithInputs date={date} onDateChange={setDate} />
                             {canLogPayments && user && (
                                 <LogPaymentDialog supplier={supplier} onPaymentLogged={fetchDetails} disabled={isReadOnly} />
                             )}

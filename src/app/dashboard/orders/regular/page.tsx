@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
@@ -65,6 +64,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getStaffList } from "@/app/actions";
+import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
 
 type CartItem = {
   id: string;
@@ -425,42 +425,7 @@ function ExportDialog({ children, onExport }: { children: React.ReactNode, onExp
         </DialogHeader>
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-                <Popover>
-                    <PopoverTrigger asChild>
-                    <Button
-                        id="date"
-                        variant={"outline"}
-                        className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !date && "text-muted-foreground"
-                        )}
-                    >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date?.from ? (
-                        date.to ? (
-                            <>
-                            {format(date.from, "LLL dd, y")} -{" "}
-                            {format(date.to, "LLL dd, y")}
-                            </>
-                        ) : (
-                            format(date.from, "LLL dd, y")
-                        )
-                        ) : (
-                        <span>Filter by date range</span>
-                        )}
-                    </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={date?.from}
-                        selected={date}
-                        onSelect={setDate}
-                        numberOfMonths={2}
-                    />
-                    </PopoverContent>
-                </Popover>
+                <DateRangeWithInputs date={date} onDateChange={setDate} />
             </div>
             <div className="grid gap-2">
                 <Select value={status} onValueChange={setStatus}>
@@ -493,8 +458,6 @@ function RegularOrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [date, setDate] = useState<DateRange | undefined>();
-  const [tempDate, setTempDate] = useState<DateRange | undefined>();
-  const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
   const [staffFilter, setStaffFilter] = useState('all');
@@ -593,7 +556,7 @@ function RegularOrdersPage() {
           staffMatch = staffFilter === 'all' || order.staffId === staffFilter;
       }
 
-      const dateMatch = !date?.from || (orderDate >= date.from && (!date.to || orderDate <= endOfDay(date.to)));
+      const dateMatch = !date?.from || (orderDate >= startOfDay(date.from) && (!date.to || orderDate <= endOfDay(date.to)));
       const searchMatch = !searchTerm || order.id.toLowerCase().includes(searchTerm.toLowerCase()) || order.customerName?.toLowerCase().includes(searchTerm.toLowerCase());
       const paymentMatch = paymentMethodFilter === 'all' || order.paymentMethod === paymentMethodFilter;
       
@@ -625,11 +588,6 @@ function RegularOrdersPage() {
     } else {
       setSelectedOrders([]);
     }
-  }
-  
-  const handleDateApply = () => {
-    setDate(tempDate);
-    setIsDatePopoverOpen(false);
   }
 
   const handleExport = (options: { dateRange?: DateRange, status: string }) => {
@@ -716,45 +674,7 @@ function RegularOrdersPage() {
                             <Input placeholder="Search by Order ID or customer..." className="pl-10 w-full sm:w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
                         {!isShowroomStaff && (
-                        <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-                            <PopoverTrigger asChild>
-                            <Button
-                                id="date"
-                                variant={"outline"}
-                                className={cn(
-                                "w-full sm:w-[260px] justify-start text-left font-normal",
-                                !date && "text-muted-foreground"
-                                )}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date?.from ? (
-                                date.to ? (
-                                    <>
-                                    {format(date.from, "LLL dd, y")} -{" "}
-                                    {format(date.to, "LLL dd, y")}
-                                    </>
-                                ) : (
-                                    format(date.from, "LLL dd, y")
-                                )
-                                ) : (
-                                <span>Filter by date range</span>
-                                )}
-                            </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                                initialFocus
-                                mode="range"
-                                defaultMonth={tempDate?.from}
-                                selected={tempDate}
-                                onSelect={setTempDate}
-                                numberOfMonths={2}
-                            />
-                            <div className="p-2 border-t flex justify-end">
-                                <Button onClick={handleDateApply}>Apply</Button>
-                            </div>
-                            </PopoverContent>
-                        </Popover>
+                            <DateRangeWithInputs date={date} onDateChange={setDate} />
                         )}
                          <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
                             <SelectTrigger className="w-full sm:w-[180px]">
