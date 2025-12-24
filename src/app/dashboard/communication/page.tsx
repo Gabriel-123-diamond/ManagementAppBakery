@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
 
 
 type User = {
@@ -330,7 +330,7 @@ function ViewReportsTab() {
                                             {staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
-                                    <DateRangePicker date={dateFilter} onDateChange={setDateFilter} align="end" />
+                                    <DateRangeWithInputs date={dateFilter} onDateChange={setDateFilter} align="end" />
                                 </div>
                             </div>
                         </CardHeader>

@@ -18,10 +18,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format, eachDayOfInterval, subDays, startOfDay, endOfDay } from 'date-fns';
 import { RevenueChart } from '@/components/revenue-chart';
-import { DateRange } from 'react-day-picker';
+import { DateRange } from "react-day-picker";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
 
 
 type User = {
@@ -205,7 +205,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                         <div className="text-2xl font-bold">{drivers.length > 1 ? drivers.length - 1 : 0}</div>
                     </CardContent>
                 </Card>
-                 <DateRangePicker date={date} onDateChange={setDate} className="lg:col-span-1" align="end" />
+                 <DateRangeWithInputs date={date} onDateChange={setDate} className="lg:col-span-1" align="end" />
             </div>
 
              <Card className="xl:col-span-2">
