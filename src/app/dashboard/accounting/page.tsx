@@ -12,9 +12,9 @@ import { format, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startO
 import { getFinancialSummary, getDebtRecords, getDirectCosts, getIndirectCosts, getClosingStocks, getWages, addDirectCost, addIndirectCost, getSales, getDrinkSalesSummary, PaymentConfirmation, getPaymentConfirmations, getCreditors, getDebtors, Creditor, Debtor, handleLogPayment, getWasteLogs, WasteLog, getDiscountRecords, getProfitAndLossStatement, ProfitAndLossStatement, getAccountSummary, SupplyRequest, getPendingSupplyRequests, approveStockIncrease, declineStockIncrease, handlePaymentConfirmation } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1128,7 +1128,7 @@ function IndirectCostsTab({ categories, isReadOnly }: { categories: CostCategory
 // --- New Payments & Requests Tab ---
 function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { staff_id: string; name: string }, notificationBadge?: React.ReactNode, isReadOnly?: boolean }) {
     const { toast } = useToast();
-    const [confirmations, setConfirmations] = useState<PaymentConfirmation[]>([]);
+    const [confirmations, setConfirmations] = useState<(Omit<PaymentConfirmation, 'date'> & { date: string })[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [actioningId, setActioningId] = useState<string | null>(null);
     const [visiblePendingRows, setVisiblePendingRows] = useState<number | 'all'>(10);

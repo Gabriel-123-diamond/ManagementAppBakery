@@ -1475,7 +1475,7 @@ export type PaymentConfirmation = {
 };
 
 
-export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> {
+export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmation, 'date'> & { date: string }[]> {
   try {
     const q = query(
       collection(db, 'payment_confirmations'),
@@ -1487,8 +1487,8 @@ export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> 
         return { 
             id: docSnap.id,
              ...data,
-            date: data.date, // Keep as Timestamp
-        } as PaymentConfirmation;
+            date: (data.date as Timestamp).toDate().toISOString(),
+        } as Omit<PaymentConfirmation, 'date'> & { date: string };
     });
   } catch (error) {
     console.error("Error fetching payment confirmations:", error);
@@ -1513,7 +1513,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
             if (action === 'approve') {
                 
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
-                    const salesDate = new Date(confirmationData.date.toDate());
+                    const salesDate = new Date(confirmationData.date);
                     if (isNaN(salesDate.getTime())) { 
                         throw new Error("Invalid date found in payment confirmation record.");
                     }
@@ -2553,7 +2553,6 @@ type SaleData = {
 export async function handleSellToCustomer(data: SaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-            // --- READS FIRST ---
             const runRef = doc(db, 'transfers', data.runId);
             const staffRef = doc(db, 'staff', data.staffId);
             const customerRef = data.customerId !== 'walk-in' ? doc(db, 'customers', data.customerId) : null;
@@ -2576,7 +2575,6 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 }
             }
 
-            // --- WRITES SECOND ---
             const newOrderRef = doc(collection(db, 'orders'));
             const driverName = staffDoc.data().name;
 
@@ -2650,7 +2648,6 @@ type PosSaleData = {
 export async function handlePosSale(data: PosSaleData): Promise<{ success: boolean; error?: string, orderId?: string }> {
     try {
         const orderId = await runTransaction(db, async (transaction) => {
-             // --- READS FIRST ---
             for (const item of data.items) {
                 const stockRef = doc(db, 'staff', data.staffId, 'personal_stock', item.productId);
                 const stockDoc = await transaction.get(stockRef);
@@ -2659,7 +2656,6 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
                 }
             }
 
-            // --- WRITES SECOND ---
             const newOrderRef = doc(collection(db, 'orders'));
             const confirmationRef = doc(collection(db, 'payment_confirmations'));
 
