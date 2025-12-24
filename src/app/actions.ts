@@ -1456,7 +1456,7 @@ export async function handleAddExpense(expenseData: Omit<Expense, 'id' | 'date'>
 
 export type PaymentConfirmation = {
   id: string;
-  date: string;
+  date: Timestamp;
   driverId: string;
   driverName: string;
   runId: string;
@@ -1474,7 +1474,7 @@ export type PaymentConfirmation = {
 };
 
 
-export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> {
+export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmation, 'date'> & { date: string }[]> {
   try {
     const q = query(
       collection(db, 'payment_confirmations'),
@@ -1483,12 +1483,11 @@ export async function getPaymentConfirmations(): Promise<PaymentConfirmation[]> 
     const snapshot = await getDocs(q);
     return snapshot.docs.map(docSnap => {
         const data = docSnap.data();
-        const date = data.date as Timestamp;
         return { 
             id: docSnap.id,
              ...data,
-            date: date.toDate().toISOString(),
-        } as PaymentConfirmation
+            date: (data.date as Timestamp).toDate().toISOString(),
+        } as Omit<PaymentConfirmation, 'date'> & { date: string };
     });
   } catch (error) {
     console.error("Error fetching payment confirmations:", error);
@@ -2485,8 +2484,7 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
 
         ordersSnapshot.docs.forEach(docSnap => {
             const order = docSnap.data();
-            if (order.status !== 'Completed') return;
-
+            
             const customerId = order.customerId || 'walk-in';
             const customerName = order.customerName || 'Walk-in';
 
@@ -2494,9 +2492,12 @@ export async function getCustomersForRun(runId: string): Promise<any[]> {
                 salesByCustomer[customerId] = { customerId, customerName, totalSold: 0, totalPaid: 0 };
             }
             
-            salesByCustomer[customerId].totalSold += order.total;
-            if (order.paymentMethod !== 'Credit') {
-                salesByCustomer[customerId].totalPaid += order.total;
+            // Only add to "sold" if the order is completed
+            if (order.status === 'Completed') {
+                salesByCustomer[customerId].totalSold += order.total;
+                if (order.paymentMethod !== 'Credit') {
+                    salesByCustomer[customerId].totalPaid += order.total;
+                }
             }
         });
 
@@ -2555,7 +2556,6 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
         const orderId = await runTransaction(db, async (transaction) => {
             const newOrderRef = doc(collection(db, 'orders'));
             
-            // --- READS ---
             const runDoc = await transaction.get(doc(db, 'transfers', data.runId));
             if (!runDoc.exists()) throw new Error("Sales run not found.");
 
@@ -2575,7 +2575,6 @@ export async function handleSellToCustomer(data: SaleData): Promise<{ success: b
                 }
             }
             
-            // --- WRITES ---
             const newOrderData = {
                 salesRunId: data.runId,
                 customerId: data.customerId,
@@ -2648,7 +2647,6 @@ export async function handlePosSale(data: PosSaleData): Promise<{ success: boole
         const orderId = await runTransaction(db, async (transaction) => {
             const newOrderRef = doc(collection(db, 'orders'));
             const confirmationRef = doc(collection(db, 'payment_confirmations'));
-            const orderDate = new Date(data.date);
             
             // --- READS ---
             for (const item of data.items) {
@@ -3165,6 +3163,9 @@ export async function handleCompleteRun(runId: string): Promise<{success: boolea
             const ordersSnapshot = await getDocs(ordersQuery);
 
             const salesDate = new Date(); // Use current date for sales record upon completion
+            if (isNaN(salesDate.getTime())) { 
+                throw new Error("Invalid date generated for sales completion.");
+            }
             const salesDocId = format(salesDate, 'yyyy-MM-dd');
             const salesDocRef = doc(db, 'sales', salesDocId);
             const salesDoc = await transaction.get(salesDocRef);
@@ -3324,3 +3325,6 @@ export async function returnUnusedIngredients(
     
 
 
+
+
+  
