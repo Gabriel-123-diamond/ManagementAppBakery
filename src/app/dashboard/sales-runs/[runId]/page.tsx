@@ -1669,7 +1669,7 @@ function SalesRunDetailsPageClientContent() {
                 <Link href="/dashboard/deliveries" className="flex items-center gap-2 text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Deliveries</Link>
                  <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => fetchRunData()} disabled={isLoading}>
-                        <RefreshCw className={`mr-2 h-4 w-4 animate-spin ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => handlePrint(summaryReceiptRef.current)}>
                         <Printer className={`mr-2 h-4 w-4`} /> Print Run Summary
@@ -2060,5 +2060,3 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
-
-    
