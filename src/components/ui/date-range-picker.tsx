@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -20,7 +21,7 @@ interface DateRangePickerProps extends React.HTMLAttributes<HTMLDivElement> {
   align?: "start" | "center" | "end"
 }
 
-export function DateRangeWithInputs({
+export function DateRangePicker({
   className,
   date,
   onDateChange,
@@ -31,6 +32,7 @@ export function DateRangeWithInputs({
   const resetDate = (e: React.MouseEvent) => {
     e.stopPropagation()
     onDateChange(undefined)
+    setIsOpen(false);
   }
 
   return (
@@ -88,12 +90,7 @@ export function DateRangeWithInputs({
                     mode="range"
                     defaultMonth={date?.from}
                     selected={date}
-                    onSelect={(range) => {
-                      onDateChange(range);
-                      if (range?.from && range?.to) {
-                        // setIsOpen(false); // Optionally close on range completion
-                      }
-                    }}
+                    onSelect={onDateChange}
                     numberOfMonths={1}
                 />
             </div>

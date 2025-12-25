@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -27,7 +28,7 @@ import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 
 const chartConfig = {
@@ -299,7 +300,7 @@ export default function AttendancePage() {
                                <CardTitle>Attendance Log</CardTitle>
                                <CardDescription>A complete history of all clock-in and clock-out events.</CardDescription>
                             </div>
-                             <DateRangeWithInputs date={date} onDateChange={setDate} />
+                             <DateRangePicker date={date} onDateChange={setDate} />
                         </div>
                     </CardHeader>
                     <CardContent>

@@ -25,7 +25,6 @@ import {
   Send,
   PlusCircle,
   Trash2,
-  Calendar as CalendarIcon,
   Package,
   ArrowRightLeft,
   Wrench,
@@ -39,8 +38,6 @@ import {
   CheckCircle,
   XCircle,
   History,
-  Undo2,
-  BookUser,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -52,20 +49,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+
 import { format, startOfDay, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { collection, getDocs, query, where, orderBy, Timestamp, getDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getReturnedStockTransfers, getProductionBatches, getProductsForStaff } from "@/app/actions";
+import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getProductionBatches } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 type User = {
     name: string;
@@ -99,79 +96,6 @@ type Ingredient = {
 };
 
 
-function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
-    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
-    const [isOpen, setIsOpen] = useState(false);
-
-    useEffect(() => {
-        setTempDate(date);
-    }, [date]);
-
-    const handleApply = () => {
-        setDate(tempDate);
-        setIsOpen(false);
-    }
-
-    return (
-         <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal",!date && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date?.from ? ( date.to ? (<> {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")} </>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align={align}>
-                <Calendar initialFocus mode="range" defaultMonth={tempDate?.from} selected={tempDate} onSelect={setTempDate} numberOfMonths={2}/>
-                <div className="p-2 border-t flex justify-end">
-                    <Button onClick={handleApply}>Apply</Button>
-                </div>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
-function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: Transfer | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
-    if (!transfer) return null;
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Transfer Details</DialogTitle>
-                     <DialogDescription>
-                        From {transfer.from_staff_name} to {transfer.to_staff_name}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4 max-h-96 overflow-y-auto">
-                    <div className="text-sm space-y-1">
-                        <div className="flex justify-between"><span>Date Initiated:</span><span>{transfer.date ? format(new Date(transfer.date), 'Pp') : 'N/A'}</span></div>
-                        <div className="flex justify-between"><span>Status:</span><Badge variant={transfer.status === 'pending' || transfer.status === 'pending_return' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' || transfer.status === 'return_completed' ? 'default' : 'destructive'}>{transfer.status.replace(/_/g, ' ')}</Badge></div>
-                        {transfer.time_received && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
-                        {transfer.time_completed && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
-                    </div>
-                    <Separator/>
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {transfer.items.map(item => (
-                                <TableRow key={item.productId}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {transfer.notes && (
-                        <div className="space-y-1">
-                            <h4 className="font-semibold text-sm">Notes</h4>
-                            <p className="text-sm p-2 bg-muted rounded-md">{transfer.notes}</p>
-                        </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
 function PaginationControls({
     visibleRows,
     setVisibleRows,
@@ -189,7 +113,7 @@ function PaginationControls({
             setVisibleRows(num);
         }
     };
-    
+
     return (
         <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
             <span>Show:</span>
@@ -299,34 +223,37 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
     )
 }
 
-function AcceptTransferDialog({ transfer, onAccept, children }: { transfer: Transfer, onAccept: (id: string, action: 'accept' | 'decline') => void, children: React.ReactNode }) {
+function AcceptRunDialog({ transfer, onAccept }: { transfer: Transfer, onAccept: (id: string, action: 'accept' | 'decline') => void }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
 
     const handleAction = async (action: 'accept' | 'decline') => {
         setIsSubmitting(true);
         await onAccept(transfer.id, action);
         setIsSubmitting(false);
+        setIsOpen(false);
     }
 
     return (
-        <AlertDialog>
-            <AlertDialogTrigger asChild>
-                {children}
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Acknowledge Transfer: {transfer.id.substring(0, 6).toUpperCase()}</AlertDialogTitle>
-                    <AlertDialogDescription>
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm">View & Acknowledge</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Acknowledge Transfer: {transfer.id.substring(0, 6).toUpperCase()}</DialogTitle>
+                    <DialogDescription>
                         You are about to accept responsibility for the following items. This action cannot be undone.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
+                    </DialogDescription>
+                    <DialogClose />
+                </DialogHeader>
                 <div className="py-4 max-h-[400px] overflow-y-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Product</TableHead>
                                 <TableHead>Quantity</TableHead>
-                                {transfer.totalValue != null && <TableHead className="text-right">Value</TableHead>}
+                                <TableHead className="text-right">Value</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -334,7 +261,7 @@ function AcceptTransferDialog({ transfer, onAccept, children }: { transfer: Tran
                                 <TableRow key={item.productId}>
                                     <TableCell>{item.productName}</TableCell>
                                     <TableCell>{item.quantity}</TableCell>
-                                    {transfer.totalValue != null && <TableCell className="text-right">₦{((item.price || 0) * item.quantity).toLocaleString()}</TableCell>}
+                                    <TableCell className="text-right">₦{((item.price || 0) * item.quantity).toLocaleString()}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -346,87 +273,64 @@ function AcceptTransferDialog({ transfer, onAccept, children }: { transfer: Tran
                         <p className="p-2 bg-muted rounded-md">{transfer.notes}</p>
                     </div>
                 )}
-                {transfer.totalValue != null && (
-                    <div className="font-bold text-lg flex justify-between border-t pt-4">
-                        <span>Total Run Value:</span>
-                        <span>₦{(transfer.totalValue || 0).toLocaleString()}</span>
-                    </div>
-                )}
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleAction('decline')} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                <div className="font-bold text-lg flex justify-between border-t pt-4">
+                    <span>Total Run Value:</span>
+                    <span>₦{(transfer.totalValue || 0).toLocaleString()}</span>
+                </div>
+                <DialogFooter className="mt-4">
+                     <Button variant="destructive" onClick={() => handleAction('decline')} disabled={isSubmitting}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Decline
-                    </AlertDialogAction>
-                    <AlertDialogAction onClick={() => handleAction('accept')} disabled={isSubmitting}>
+                    </Button>
+                     <Button onClick={() => handleAction('accept')} disabled={isSubmitting}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Accept
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
 
-
 function ReportWasteTab({ products, user, onWasteReported }: { products: { productId: string; productName: string; stock: number }[], user: User | null, onWasteReported: () => void }) {
     const { toast } = useToast();
-    const [items, setItems] = useState<{ productId: string, quantity: number | string }[]>([{ productId: '', quantity: 1 }]);
+    const [productId, setProductId] = useState("");
+    const [quantity, setQuantity] = useState<number | string>(1);
     const [reason, setReason] = useState("");
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleItemChange = (index: number, field: 'productId' | 'quantity', value: string) => {
-        const newItems = [...items];
-        if (field === 'quantity') {
-            const numValue = Number(value);
-            const productInfo = products.find(p => p.productId === newItems[index].productId);
-            if (productInfo && numValue > productInfo.stock) {
-                toast({ variant: 'destructive', title: 'Error', description: `Cannot report more than ${productInfo.stock} units of waste for this item.` });
-                newItems[index][field] = productInfo.stock;
-            } else {
-                newItems[index][field] = value === '' ? '' : numValue;
-            }
-        } else {
-            newItems[index][field] = value;
-        }
-        setItems(newItems);
-    };
-
-    const handleAddItem = () => {
-        setItems([...items, { productId: '', quantity: 1 }]);
-    };
-
-    const handleRemoveItem = (index: number) => {
-        setItems(items.filter((_, i) => i !== index));
-    };
+    const selectedProduct = useMemo(() => products.find(p => p.productId === productId), [productId, products]);
 
     const handleSubmit = async () => {
-        if (items.some(item => !item.productId || !item.quantity || Number(item.quantity) <= 0) || !reason || !user) {
+        if (!productId || !quantity || !reason || !user) {
             toast({ variant: 'destructive', title: 'Error', description: 'Please fill all required fields.' });
             return;
         }
 
+        const productStock = selectedProduct?.stock || 0;
+
+        if (Number(quantity) > productStock) {
+            toast({ variant: 'destructive', title: 'Error', description: `Cannot report more waste than available stock (${productStock}).` });
+            return;
+        }
+
         setIsSubmitting(true);
-        const productsWithCategories = await Promise.all(items.map(async item => {
-            const productDoc = await getDoc(doc(db, 'products', item.productId));
-            return {
-                ...item,
-                quantity: Number(item.quantity),
-                productName: productDoc.exists() ? productDoc.data().name : 'Unknown',
-                productCategory: productDoc.exists() ? productDoc.data().category : 'Unknown'
-            };
-        }));
-
-        const dataToSubmit = {
-            items: productsWithCategories,
+        const productCategory = (await getDoc(doc(db, 'products', productId))).data()?.category || 'Unknown';
+        
+        const result = await handleReportWaste({
+            items: [{
+              productId,
+              productName: selectedProduct?.productName || 'Unknown Product',
+              productCategory,
+              quantity: Number(quantity),
+            }],
             reason,
-            notes,
-        };
-
-        const result = await handleReportWaste(dataToSubmit, user);
+            notes
+        }, user);
 
         if (result.success) {
             toast({ title: 'Success', description: 'Waste reported successfully. Inventory has been updated.' });
-            setItems([{ productId: '', quantity: 1 }]);
+            setProductId("");
+            setQuantity(1);
             setReason("");
             setNotes("");
             onWasteReported(); // Callback to refresh product list
@@ -434,15 +338,8 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
             toast({ variant: 'destructive', title: 'Error', description: result.error });
         }
         setIsSubmitting(false);
-    };
-
-    const getAvailableProductsForRow = (rowIndex: number) => {
-        const selectedIdsInOtherRows = new Set(
-            items.filter((_, i) => i !== rowIndex).map(item => item.productId)
-        );
-        return products.filter(p => !selectedIdsInOtherRows.has(p.productId));
-    };
-
+    }
+    
     return (
         <Card className="flex-1">
             <CardHeader>
@@ -452,32 +349,26 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="space-y-2">
-                    <Label>Items to Report</Label>
+                 <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                        {items.map((item, index) => {
-                            const availableProducts = getAvailableProductsForRow(index);
-                            return (
-                                <div key={`waste-item-${index}`} className="grid grid-cols-[1fr_120px_auto] gap-2 items-center">
-                                    <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val)}>
-                                        <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
-                                        <SelectContent>
-                                            {availableProducts.map((p) => (
-                                                <SelectItem key={`${p.productId}-${index}`} value={p.productId}>
-                                                    {p.productName} (Stock: {p.stock})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} />
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </div>
-                            )
-                        })}
+                        <Label htmlFor="waste-product">Product</Label>
+                        <Select value={productId} onValueChange={setProductId}>
+                            <SelectTrigger id="waste-product">
+                                <SelectValue placeholder="Select a product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {products.map((p) => (
+                                <SelectItem key={p.productId} value={p.productId}>
+                                    {p.productName} (Stock: {p.stock})
+                                </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Button variant="outline" size="sm" className="mt-2" onClick={handleAddItem}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Another Item
-                    </Button>
+                     <div className="space-y-2">
+                        <Label htmlFor="waste-quantity">Quantity Wasted</Label>
+                        <Input id="waste-quantity" type="number" min="1" value={quantity} onChange={e => setQuantity(Number(e.target.value))} />
+                    </div>
                 </div>
                  <div className="space-y-2">
                     <Label htmlFor="waste-reason">Reason for Waste</Label>
@@ -496,7 +387,7 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="waste-notes">Additional Notes (Optional)</Label>
-                    <Input id="waste-notes" value={notes} onChange={e => setNotes(e.target.value)} />
+                    <Textarea id="waste-notes" value={notes} onChange={e => setNotes(e.target.value)} />
                 </div>
                 <div className="flex justify-end">
                     <Button onClick={handleSubmit} disabled={isSubmitting}>
@@ -530,27 +421,20 @@ export default function StockControlPage() {
   const [pendingBatches, setPendingBatches] = useState<ProductionBatch[]>([]);
   const [completedTransfers, setCompletedTransfers] = useState<Transfer[]>([]);
   const [myWasteLogs, setMyWasteLogs] = useState<WasteLog[]>([]);
-  const [personalStock, setPersonalStock] = useState<{ productId: string, productName: string, stock: number }[]>([]);
   
   const [date, setDate] = useState<DateRange | undefined>();
   const [allPendingDate, setAllPendingDate] = useState<DateRange | undefined>();
-  const [prodTransferDate, setProdTransferDate] = useState<DateRange | undefined>();
-  const [batchApprovalDate, setBatchApprovalDate] = useState<DateRange | undefined>();
-
+  
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingBatches, setIsLoadingBatches] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [viewingTransfer, setViewingTransfer] = useState<Transfer | null>(null);
-
 
   const [visiblePendingRows, setVisiblePendingRows] = useState<number | 'all'>(10);
   const [visibleHistoryRows, setVisibleHistoryRows] = useState<number | 'all'>(10);
   const [visibleLogRows, setVisibleLogRows] = useState<number | 'all'>(10);
-  const [visibleProdTransferRows, setVisibleProdTransferRows] = useState<number | 'all'>(10);
-  const [visibleBatchApprovalRows, setVisibleBatchApprovalRows] = useState<number | 'all'>(10);
   const [visibleAllPendingRows, setVisibleAllPendingRows] = useState<number | 'all'>(10);
   
-  const fetchPageData = useCallback(async () => {
+  const fetchPageData = async () => {
         const userStr = localStorage.getItem('loggedInUser');
         if (!userStr) {
             toast({ variant: 'destructive', title: 'Error', description: 'Could not identify user.' });
@@ -565,13 +449,14 @@ export default function StockControlPage() {
             const staffSnapshot = await getDocs(staffQuery);
             setStaff(staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffMember)));
 
-            const isSalesStaff = ['Delivery Staff', 'Showroom Staff'].includes(currentUser.role);
-            if (isSalesStaff) {
-                const stockData = await getProductsForStaff(currentUser.staff_id);
-                setPersonalStock(stockData.map(d => ({productId: d.productId, productName: d.name, stock: d.stock})));
-            } else {
+            const userRole = currentUser.role;
+            if (userRole === 'Manager' || userRole === 'Supervisor' || userRole === 'Storekeeper') {
                 const productsSnapshot = await getDocs(collection(db, "products"));
                 setProducts(productsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, stock: doc.data().stock } as Product)));
+            } else if (userRole === 'Delivery Staff') {
+                 const personalStockQuery = collection(db, 'staff', currentUser.staff_id, 'personal_stock');
+                const personalStockSnapshot = await getDocs(personalStockQuery);
+                setProducts(personalStockSnapshot.docs.map(doc => ({ id: doc.data().productId, name: doc.data().productName, stock: doc.data().stock } as Product)));
             }
             
              const [pendingData, completedData, wasteData, prodTransfers, ingredientsSnapshot, initiatedTransfersSnapshot, allBatchesResult] = await Promise.all([
@@ -600,22 +485,51 @@ export default function StockControlPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    };
 
   useEffect(() => {
+    setIsLoading(true);
     fetchPageData();
 
+    setIsLoadingBatches(true);
     const userStr = localStorage.getItem('loggedInUser');
     if (userStr) {
-      const qPendingBatches = query(collection(db, 'production_batches'), where('status', '==', 'pending_approval'));
-      const unsubBatches = onSnapshot(qPendingBatches, (snapshot) => {
-          setPendingBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString() } as ProductionBatch)));
-          setIsLoadingBatches(false);
-      });
+        const currentUser = JSON.parse(userStr);
 
-      return () => {
-          unsubBatches();
-      };
+        const qPendingTransfers = query(collection(db, "transfers"), where('to_staff_id', '==', currentUser.staff_id), where('status', '==', 'pending'));
+        const unsubTransfers = onSnapshot(qPendingTransfers, async (snapshot) => {
+            const transfers = await Promise.all(snapshot.docs.map(async (docSnap) => {
+                 const data = docSnap.data();
+                 let totalValue = 0;
+                 const itemsWithPrices = await Promise.all(
+                    (data.items || []).map(async (item: any) => {
+                        const productDoc = await getDoc(doc(db, 'products', item.productId));
+                        const price = productDoc.exists() ? productDoc.data().price : 0;
+                        totalValue += price * item.quantity;
+                        return { ...item, price };
+                    })
+                );
+                 return { 
+                    id: docSnap.id,
+                    ...data,
+                    items: itemsWithPrices,
+                    totalValue,
+                    date: (data.date as Timestamp).toDate().toISOString(),
+                 } as Transfer;
+            }));
+            setPendingTransfers(transfers);
+        });
+        
+        const qPendingBatches = query(collection(db, 'production_batches'), where('status', '==', 'pending_approval'));
+        const unsubBatches = onSnapshot(qPendingBatches, (snapshot) => {
+            setPendingBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate().toISOString() } as ProductionBatch)));
+            setIsLoadingBatches(false);
+        });
+
+        return () => {
+            unsubTransfers();
+            unsubBatches();
+        };
     }
   }, []);
 
@@ -770,26 +684,6 @@ export default function StockControlPage() {
     }
     return visibleLogRows === 'all' ? filtered : filtered.slice(0, visibleLogRows);
   }, [initiatedTransfers, visibleLogRows, date]);
-
-  const paginatedProductionTransferLogs = useMemo(() => {
-    let filtered = initiatedTransfers.filter(t => t.notes?.includes('Return from production batch'));
-    if (prodTransferDate?.from) {
-        const from = startOfDay(prodTransferDate.from);
-        const to = prodTransferDate.to ? endOfDay(prodTransferDate.to) : endOfDay(prodTransferDate.from);
-        filtered = filtered.filter(t => new Date(t.date) >= from && new Date(t.date) <= to);
-    }
-    return visibleProdTransferRows === 'all' ? filtered : filtered.slice(0, visibleProdTransferRows);
-  }, [initiatedTransfers, prodTransferDate, visibleProdTransferRows]);
-
-  const paginatedBatchApprovalLogs = useMemo(() => {
-    let filtered = allProductionBatches.filter(b => b.status === 'completed' || b.status === 'declined');
-    if (batchApprovalDate?.from) {
-        const from = startOfDay(batchApprovalDate.from);
-        const to = batchApprovalDate.to ? endOfDay(batchApprovalDate.to) : endOfDay(batchApprovalDate.from);
-        filtered = filtered.filter(b => b.approvedAt && new Date(b.approvedAt) >= from && new Date(b.approvedAt) <= to);
-    }
-    return visibleBatchApprovalRows === 'all' ? filtered : filtered.slice(0, visibleBatchApprovalRows);
-  }, [allProductionBatches, batchApprovalDate, visibleBatchApprovalRows]);
   
   const getAvailableProductsForRow = (rowIndex: number) => {
     const selectedIdsInOtherRows = new Set(
@@ -799,19 +693,16 @@ export default function StockControlPage() {
   };
 
   const userRole = user?.role;
-  const isManagerOrDev = userRole === 'Manager' || userRole === 'Developer';
-  const isAccountant = userRole === 'Accountant';
-  const isStorekeeper = userRole === 'Storekeeper';
-  const canInitiateTransfer = isManagerOrDev || isStorekeeper;
+  const canInitiateTransfer = userRole === 'Manager' || userRole === 'Supervisor' || userRole === 'Storekeeper' || userRole === 'Developer';
   
-  if (!user || isLoading) {
+  if (!user) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
   
   if (!canInitiateTransfer) {
      return (
-         <div className="space-y-6">
-            <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
+         <div className="flex flex-col gap-6">
+             <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
             <div className="flex flex-col lg:flex-row gap-6">
                  <div className="flex flex-col gap-6 flex-[2]">
                     <Card>
@@ -824,34 +715,6 @@ export default function StockControlPage() {
                             <CardDescription>Review and acknowledge stock transferred to you. Accepted Sales Runs will appear in your "Deliveries" tab.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                           <div className="md:hidden space-y-4">
-                                {isLoading ? (
-                                    <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div>
-                                ) : paginatedPending.length === 0 ? (
-                                    <p className="text-center text-muted-foreground py-12">No pending transfers.</p>
-                                ) : (
-                                    paginatedPending.map(t => (
-                                        <Card key={t.id} className="p-4 space-y-3">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-semibold">{t.from_staff_name}</p>
-                                                    <p className="text-sm text-muted-foreground">{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</p>
-                                                </div>
-                                                {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
-                                            </div>
-                                            <div className="text-sm">
-                                                Items: {t.items.reduce((sum, item) => sum + item.quantity, 0)}
-                                            </div>
-                                            <div className="flex justify-end">
-                                                <AcceptTransferDialog transfer={t} onAccept={handleAcknowledge}>
-                                                    <Button size="sm">View & Acknowledge</Button>
-                                                </AcceptTransferDialog>
-                                            </div>
-                                        </Card>
-                                    ))
-                                )}
-                            </div>
-                            <div className="hidden md:block">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -870,7 +733,7 @@ export default function StockControlPage() {
                                     ) : (
                                         paginatedPending.map(t => (
                                             <TableRow key={t.id}>
-                                                <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
+                                                <TableCell>{format(new Date(t.date), 'Pp')}</TableCell>
                                                 <TableCell>{t.from_staff_name}</TableCell>
                                                 <TableCell>
                                                     {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
@@ -879,16 +742,13 @@ export default function StockControlPage() {
                                                     {t.items.reduce((sum, item) => sum + item.quantity, 0)} items
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <AcceptTransferDialog transfer={t} onAccept={handleAcknowledge}>
-                                                        <Button size="sm">View & Acknowledge</Button>
-                                                    </AcceptTransferDialog>
+                                                    <AcceptRunDialog transfer={t} onAccept={handleAcknowledge} />
                                                 </TableCell>
                                             </TableRow>
                                         ))
                                     )}
                                 </TableBody>
                             </Table>
-                            </div>
                         </CardContent>
                         <CardFooter>
                             <PaginationControls visibleRows={visiblePendingRows} setVisibleRows={setVisiblePendingRows} totalRows={pendingTransfers.length} />
@@ -901,28 +761,6 @@ export default function StockControlPage() {
                             <CardDescription>A log of all stock transfers you have successfully accepted.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <div className="md:hidden space-y-4">
-                                {paginatedHistory.map(t => (
-                                    <Card key={t.id} className="p-4 space-y-2">
-                                         <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-semibold">{t.from_staff_name}</p>
-                                                <p className="text-xs text-muted-foreground">Received: {t.time_received ? format(new Date(t.time_received), 'Pp') : 'N/A'}</p>
-                                            </div>
-                                            <Badge>{t.status}</Badge>
-                                        </div>
-                                         <div className="text-sm pt-2 border-t flex justify-between items-center">
-                                            {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
-                                            {t.is_sales_run && t.status === 'active' && (
-                                                <Button variant="outline" size="sm" asChild>
-                                                    <Link href={`/dashboard/sales-runs?runId=${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage</Link>
-                                                </Button>
-                                            )}
-                                         </div>
-                                    </Card>
-                                ))}
-                            </div>
-                            <div className="hidden md:block">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -961,7 +799,6 @@ export default function StockControlPage() {
                                 )}
                                 </TableBody>
                             </Table>
-                            </div>
                         </CardContent>
                          <CardFooter>
                             <PaginationControls visibleRows={visibleHistoryRows} setVisibleRows={setVisibleHistoryRows} totalRows={completedTransfers.length} />
@@ -969,7 +806,7 @@ export default function StockControlPage() {
                     </Card>
                 </div>
                 <div className="flex-1">
-                    <ReportWasteTab products={personalStock} user={user} onWasteReported={fetchPageData} />
+                    <ReportWasteTab products={products.map(p => ({ productId: p.id, productName: p.name, stock: p.stock }))} user={user} onWasteReported={fetchPageData} />
                 </div>
             </div>
          </div>
@@ -979,195 +816,173 @@ export default function StockControlPage() {
   // Full view for admins
   return (
     <div className="flex flex-col gap-4">
-      <TransferDetailsDialog transfer={viewingTransfer} isOpen={!!viewingTransfer} onOpenChange={() => setViewingTransfer(null)} />
+       <TransferDetailsDialog transfer={viewingTransfer} isOpen={!!viewingTransfer} onOpenChange={() => setViewingTransfer(null)} />
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
       </div>
-      <Tabs defaultValue={isManagerOrDev ? "log" : "initiate-transfer"}>
+      <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' ? "log" : "initiate-transfer"}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
-                {isStorekeeper &&
+                {(userRole === 'Storekeeper' || userRole === 'Developer') && 
                     <TabsTrigger value="initiate-transfer">
                         <Send className="mr-2 h-4 w-4" /> Initiate Transfer
                     </TabsTrigger>
                 }
-                <TabsTrigger value="pending-transfers" className="relative">
-                    <Hourglass className="mr-2 h-4 w-4" /> All Pending
-                    {allPendingTransfers.length > 0 && (
-                        <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0">
-                            {allPendingTransfers.length}
-                        </Badge>
-                    )}
-                </TabsTrigger>
-                 <TabsTrigger value="log" className="relative">
+                 {(userRole === 'Storekeeper' || userRole === 'Developer' || userRole === 'Manager') && 
+                    <TabsTrigger value="batch-approvals" className="relative">
+                        <Wrench className="mr-2 h-4 w-4" /> Batch Approvals
+                        {pendingBatches.length > 0 && (
+                            <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0">
+                                {pendingBatches.length}
+                            </Badge>
+                        )}
+                    </TabsTrigger>
+                }
+                <TabsTrigger value="log" className="relative">
                     <History className="mr-2 h-4 w-4"/> Log
                 </TabsTrigger>
             </TabsList>
         </div>
         <TabsContent value="initiate-transfer">
-            <Card>
-                <CardHeader>
-                <CardTitle>Transfer Stock to Sales Floor</CardTitle>
-                <CardDescription>
-                    Initiate a transfer of finished products from the main store to a
-                    sales staff member.
-                </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <Label htmlFor="transfer-to">Transfer to</Label>
-                        <Select value={transferTo} onValueChange={handleTransferToChange} disabled={isLoading}>
-                        <SelectTrigger id="transfer-to">
-                            <SelectValue placeholder="Select a staff member" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {staff.filter(s => s.role === 'Showroom Staff' || s.role === 'Delivery Staff').map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                                {s.name} ({s.role})
-                            </SelectItem>
-                            ))}
-                        </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex items-end pb-2">
-                        <div className="flex items-center space-x-2">
-                            <Checkbox id="sales-run" checked={isSalesRun} onCheckedChange={(checked) => setIsSalesRun(checked as boolean)} disabled={isSalesRunDisabled}/>
-                            <div className="grid gap-1.5 leading-none">
-                                <label
-                                htmlFor="sales-run"
-                                className={cn("text-sm font-medium leading-none", isSalesRunDisabled ? "text-muted-foreground" : "peer-disabled:cursor-not-allowed peer-disabled:opacity-50")}
-                                >
-                                This is for a sales run
-                                </label>
-                                <p className="text-sm text-muted-foreground">
-                                The recipient will manage sales for these items.
-                                </p>
-                            </div>
+        <Card>
+            <CardHeader>
+            <CardTitle>Transfer Stock to Sales Floor</CardTitle>
+            <CardDescription>
+                Initiate a transfer of finished products from the main store to a
+                sales staff member.
+            </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <Label htmlFor="transfer-to">Transfer to</Label>
+                    <Select value={transferTo} onValueChange={handleTransferToChange} disabled={isLoading}>
+                    <SelectTrigger id="transfer-to">
+                        <SelectValue placeholder="Select a staff member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {staff.filter(s => s.role === 'Showroom Staff' || s.role === 'Delivery Staff').map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                            {s.name} ({s.role})
+                        </SelectItem>
+                        ))}
+                    </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-end pb-2">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox id="sales-run" checked={isSalesRun} onCheckedChange={(checked) => setIsSalesRun(checked as boolean)} disabled={isSalesRunDisabled}/>
+                        <div className="grid gap-1.5 leading-none">
+                            <label
+                            htmlFor="sales-run"
+                            className={cn("text-sm font-medium leading-none", isSalesRunDisabled ? "text-muted-foreground" : "peer-disabled:cursor-not-allowed peer-disabled:opacity-50")}
+                            >
+                            This is for a sales run
+                            </label>
+                            <p className="text-sm text-muted-foreground">
+                            The recipient will manage sales for these items.
+                            </p>
                         </div>
                     </div>
                 </div>
+            </div>
 
+            <div className="space-y-2">
+                <Label>Items to Transfer</Label>
                 <div className="space-y-2">
-                    <Label>Items to Transfer</Label>
-                    <div className="space-y-2">
-                    {items.map((item, index) => {
-                        const availableProducts = getAvailableProductsForRow(index);
-                        return (
-                            <div
-                            key={index}
-                            className="grid grid-cols-[1fr_120px_auto] gap-2 items-center"
-                            >
-                            <Select
-                                value={item.productId}
-                                onValueChange={(value) =>
-                                handleItemChange(index, "productId", value)
-                                }
-                                disabled={isLoading}
-                            >
-                                <SelectTrigger>
-                                <SelectValue placeholder="Select a product" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                {availableProducts.map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>
-                                    {p.name} (Stock: {p.stock})
-                                    </SelectItem>
-                                ))}
-                                </SelectContent>
-                            </Select>
-                            <Input
-                                type="number"
-                                placeholder="Qty"
-                                min="1"
-                                value={item.quantity || ''}
-                                onChange={(e) =>
-                                handleItemChange(index, "quantity", e.target.value)
-                                }
-                            />
-                            <Button
-                                variant="destructive"
-                                size="icon"
-                                onClick={() => handleRemoveItem(index)}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                            </div>
-                        );
-                    })}
-                    </div>
-                    <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2"
-                    onClick={handleAddItem}
-                    >
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Item
-                    </Button>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="notes">Notes (Optional)</Label>
-                    <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                </div>
-                <div className="flex justify-end">
-                    <Button onClick={handleSubmit} disabled={isSubmitting || isLoading}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Submit Transfer
-                    </Button>
-                </div>
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="pending-transfers">
-              <Card>
-                <CardHeader>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <CardTitle>All Pending Transfers</CardTitle>
-                            <CardDescription>A log of all transfers awaiting acknowledgement across the system.</CardDescription>
+                {items.map((item, index) => {
+                    const availableProducts = getAvailableProductsForRow(index);
+                    return (
+                        <div
+                        key={index}
+                        className="grid grid-cols-[1fr_120px_auto] gap-2 items-center"
+                        >
+                        <Select
+                            value={item.productId}
+                            onValueChange={(value) =>
+                            handleItemChange(index, "productId", value)
+                            }
+                            disabled={isLoading}
+                        >
+                            <SelectTrigger>
+                            <SelectValue placeholder="Select a product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                            {availableProducts.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                {p.name} (Stock: {p.stock})
+                                </SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                        <Input
+                            type="number"
+                            placeholder="Qty"
+                            min="1"
+                            value={item.quantity || ''}
+                            onChange={(e) =>
+                            handleItemChange(index, "quantity", e.target.value)
+                            }
+                        />
+                        <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => handleRemoveItem(index)}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
                         </div>
-                        <DateRangeFilter date={allPendingDate} setDate={setAllPendingDate}/>
-                    </div>
+                    );
+                })}
+                </div>
+                <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={handleAddItem}
+                >
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                </Button>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+            <div className="flex justify-end">
+                <Button onClick={handleSubmit} disabled={isSubmitting || isLoading}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Submit Transfer
+                </Button>
+            </div>
+            </CardContent>
+        </Card>
+        </TabsContent>
+         <TabsContent value="batch-approvals">
+             <Card>
+                <CardHeader>
+                    <CardTitle>Pending Batch Approvals</CardTitle>
+                    <CardDescription>Batches requested by bakers that need ingredient approval from the storekeeper.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>From</TableHead>
-                                <TableHead>To</TableHead>
-                                <TableHead>Items</TableHead>
-                                <TableHead>Status</TableHead>
-                            </TableRow>
-                        </TableHeader>
+                        <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {isLoading ? (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
-                            ) : (
-                                paginatedAllPending.map((transfer) => (
-                                    <TableRow key={transfer.id}>
-                                        <TableCell>{transfer.date ? format(new Date(transfer.date), 'PPpp') : 'N/A'}</TableCell>
-                                        <TableCell>{transfer.from_staff_name}</TableCell>
-                                        <TableCell>{transfer.to_staff_name}</TableCell>
-                                        <TableCell>{transfer.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
-                                        <TableCell><Badge variant="secondary">{transfer.status}</Badge></TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                             { !isLoading && paginatedAllPending.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">No pending transfers found.</TableCell>
+                            {isLoadingBatches ? (
+                                 <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
+                            ) : pendingBatches.length > 0 ? pendingBatches.map(batch => (
+                                <TableRow key={batch.id}>
+                                    <TableCell>{format(new Date(batch.createdAt), 'PPP')}</TableCell>
+                                    <TableCell>{batch.recipeName}</TableCell>
+                                    <TableCell>{batch.requestedByName}</TableCell>
+                                    <TableCell><ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchPageData} /></TableCell>
                                 </TableRow>
-                            )}
+                            )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No batches are pending approval.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </CardContent>
-                <CardFooter>
-                  <PaginationControls visibleRows={visibleAllPendingRows} setVisibleRows={setVisibleAllPendingRows} totalRows={allPendingTransfers.length} />
-                </CardFooter>
               </Card>
         </TabsContent>
-         <TabsContent value="log">
+          <TabsContent value="log">
             <Card>
                 <CardHeader>
                     <CardTitle>Stock Control Log</CardTitle>
@@ -1182,7 +997,7 @@ export default function StockControlPage() {
                         </TabsList>
                         <TabsContent value="initiated" className="mt-4">
                             <div className="flex justify-end mb-4">
-                                <DateRangeFilter date={date} setDate={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} />
                             </div>
                             <Table>
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
@@ -1203,49 +1018,6 @@ export default function StockControlPage() {
                                 <PaginationControls visibleRows={visibleLogRows} setVisibleRows={setVisibleLogRows} totalRows={paginatedInitiatedLogs.length} />
                             </CardFooter>
                         </TabsContent>
-                        <TabsContent value="prod-transfers" className="mt-4">
-                             <div className="flex justify-end mb-4">
-                                <DateRangeFilter date={prodTransferDate} setDate={setProdTransferDate} />
-                            </div>
-                            <Table>
-                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {paginatedProductionTransferLogs.map(t => (
-                                         <TableRow key={t.id}>
-                                            <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
-                                            <TableCell>{t.from_staff_name}</TableCell>
-                                            <TableCell>{t.items.reduce((s,i) => s + i.quantity, 0)}</TableCell>
-                                            <TableCell><Badge variant={t.status === 'pending' ? 'secondary' : t.status === 'completed' ? 'default' : 'destructive'}>{t.status}</Badge></TableCell>
-                                            <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setViewingTransfer(t)}><Eye className="h-4 w-4"/></Button></TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                             <CardFooter className="pt-4">
-                                <PaginationControls visibleRows={visibleProdTransferRows} setVisibleRows={setVisibleProdTransferRows} totalRows={paginatedProductionTransferLogs.length} />
-                            </CardFooter>
-                        </TabsContent>
-                        <TabsContent value="batch-approvals" className="mt-4">
-                             <div className="flex justify-end mb-4">
-                                <DateRangeFilter date={batchApprovalDate} setDate={setBatchApprovalDate} />
-                            </div>
-                           <Table>
-                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Requester</TableHead><TableHead>Recipe</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {paginatedBatchApprovalLogs.map(b => (
-                                         <TableRow key={b.id}>
-                                            <TableCell>{b.approvedAt ? format(new Date(b.approvedAt), 'Pp') : 'N/A'}</TableCell>
-                                            <TableCell>{b.requestedByName}</TableCell>
-                                            <TableCell>{b.recipeName}</TableCell>
-                                            <TableCell><Badge variant={b.status === 'completed' ? 'default' : 'destructive'}>{b.status}</Badge></TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                             <CardFooter className="pt-4">
-                                <PaginationControls visibleRows={visibleBatchApprovalRows} setVisibleRows={setVisibleBatchApprovalRows} totalRows={paginatedBatchApprovalLogs.length} />
-                            </CardFooter>
-                        </TabsContent>
                     </Tabs>
                 </CardContent>
             </Card>
@@ -1254,5 +1026,3 @@ export default function StockControlPage() {
     </div>
   );
 }
-
-    

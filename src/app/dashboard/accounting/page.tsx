@@ -35,7 +35,7 @@ import { db } from '@/lib/firebase';
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 
 // --- Helper Functions & Type Definitions ---
@@ -467,7 +467,7 @@ function SummaryTab() {
                         <CardTitle>Summary of Account</CardTitle>
                         <CardDescription>A top-level overview of key financial accounts.</CardDescription>
                     </div>
-                     <DateRangeWithInputs date={date} onDateChange={setDate} />
+                     <DateRangePicker date={date} onDateChange={setDate} />
                 </div>
             </CardHeader>
             <CardContent>
@@ -560,7 +560,7 @@ function FinancialsTab() {
                         <CardTitle>Trading, Profit &amp; Loss Statement</CardTitle>
                         <CardDescription>For the period ending {date?.to ? format(date.to, 'PPP') : format(new Date(), 'PPP')}</CardDescription>
                     </div>
-                     <DateRangeWithInputs date={date} onDateChange={setDate} />
+                     <DateRangePicker date={date} onDateChange={setDate} />
                 </div>
             </CardHeader>
             <CardContent>
@@ -759,7 +759,7 @@ function DebtorsCreditorsTab({ isReadOnly }: { isReadOnly?: boolean }) {
                             <CardTitle>Debtor/Creditor Ledger</CardTitle>
                             <CardDescription>A summary ledger of debits and credits from the accounting period.</CardDescription>
                         </div>
-                         <DateRangeWithInputs date={date} onDateChange={setDate} />
+                         <DateRangePicker date={date} onDateChange={setDate} />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -914,7 +914,7 @@ function DirectCostsTab({ categories, isReadOnly }: { categories: CostCategory[]
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input placeholder="Search..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <DateRangeWithInputs date={date} onDateChange={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} />
                             </div>
                         </div>
                         <div className="mt-4">
@@ -1058,7 +1058,7 @@ function IndirectCostsTab({ categories, isReadOnly }: { categories: CostCategory
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input placeholder="Search..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <DateRangeWithInputs date={date} onDateChange={setDate} />
+                                <DateRangePicker date={date} onDateChange={setDate} />
                             </div>
                         </div>
                         <div className="mt-4">
@@ -1262,14 +1262,14 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                                         </div>
                                         <Badge variant={c.status === 'approved' ? 'default' : 'destructive'}>{c.status}</Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">{c.approvedAt ? format(new Date(c.approvedAt), 'Pp') : c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</p>
                                 </Card>
                              ))
                         )}
                     </div>
                     <div className="hidden md:block">
                     <Table>
-                         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Driver</TableHead><TableHead>Amount</TableHead><TableHead>Method</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                         <TableHeader><TableRow><TableHead>Processed At</TableHead><TableHead>Driver</TableHead><TableHead>Amount</TableHead><TableHead>Method</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                          <TableBody>
                              {isLoading ? (
                                 <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
@@ -1278,7 +1278,7 @@ function PaymentsRequestsTab({ user, notificationBadge, isReadOnly }: { user: { 
                             ) : (
                                 paginatedResolved.map(c => (
                                 <TableRow key={c.id}>
-                                    <TableCell>{c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
+                                    <TableCell>{c.approvedAt ? format(new Date(c.approvedAt), 'Pp') : c.date ? format(new Date(c.date), 'Pp') : 'N/A'}</TableCell>
                                     <TableCell>{c.driverName}</TableCell>
                                     <TableCell>{formatCurrency(c.amount)}</TableCell>
                                     <TableCell><Badge variant="outline">{c.paymentMethod}</Badge></TableCell>
@@ -1437,7 +1437,7 @@ function SalesRecordsTab() {
                             <CardTitle>Daily Sales Records</CardTitle>
                             <CardDescription>A log of all daily sales transactions.</CardDescription>
                         </div>
-                        <DateRangeWithInputs date={date} onDateChange={setDate} />
+                        <DateRangePicker date={date} onDateChange={setDate} />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -1577,7 +1577,7 @@ function DrinkSalesTab() {
                             onChange={e => setSalesMargin(Number(e.target.value))}
                             className="w-20"
                         />
-                         <DateRangeWithInputs date={date} onDateChange={setDate} />
+                         <DateRangePicker date={date} onDateChange={setDate} />
                     </div>
                 </div>
             </CardHeader>
@@ -1713,7 +1713,7 @@ function ClosingStockTab() {
     return (
         <div className="space-y-6">
              <div className="flex justify-end items-center gap-4">
-                <DateRangeWithInputs date={date} onDateChange={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} />
             </div>
             <div className="grid md:grid-cols-2 gap-6">
                 <Card>
@@ -1910,7 +1910,7 @@ function WagesTab() {
                         <CardTitle>Wages &amp; Salaries</CardTitle>
                         <CardDescription>Monthly staff emolument records.</CardDescription>
                     </div>
-                    <DateRangeWithInputs date={date} onDateChange={setDate} />
+                    <DateRangePicker date={date} onDateChange={setDate} />
                 </div>
             </CardHeader>
             <CardContent>
@@ -2024,7 +2024,7 @@ function BusinessHealthTab() {
     return (
         <div className="space-y-6">
             <div className="flex justify-end">
-                <DateRangeWithInputs date={date} onDateChange={setDate} />
+                <DateRangePicker date={date} onDateChange={setDate} />
             </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <Card className="flex flex-col h-full">

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -19,7 +20,7 @@ import { RevenueChart } from '@/components/revenue-chart';
 import { DateRange } from "react-day-picker";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 
 type User = {
@@ -203,7 +204,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                         <div className="text-2xl font-bold">{drivers.length > 1 ? drivers.length - 1 : 0}</div>
                     </CardContent>
                 </Card>
-                 <DateRangeWithInputs date={date} onDateChange={setDate} />
+                 <DateRangePicker date={date} onDateChange={setDate} />
             </div>
 
              <Card className="xl:col-span-2">
