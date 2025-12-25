@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
@@ -64,7 +65,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getStaffList } from "@/app/actions";
-import { DatePickerSplit } from "@/components/ui/date-picker-split";
+import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
 
 type CartItem = {
   id: string;
@@ -425,7 +426,7 @@ function ExportDialog({ children, onExport }: { children: React.ReactNode, onExp
         </DialogHeader>
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-                <DatePickerSplit date={date} onDateChange={setDate} />
+                <DateRangeWithInputs date={date} onDateChange={setDate} />
             </div>
             <div className="grid gap-2">
                 <Select value={status} onValueChange={setStatus}>
@@ -446,7 +447,6 @@ function ExportDialog({ children, onExport }: { children: React.ReactNode, onExp
           <Button onClick={() => { onExport({ dateRange: date, status }); setIsOpen(false); }}>Export to CSV</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
   )
 }
 
@@ -674,7 +674,7 @@ function RegularOrdersPage() {
                             <Input placeholder="Search by Order ID or customer..." className="pl-10 w-full sm:w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
                         {!isShowroomStaff && (
-                            <DatePickerSplit date={date} onDateChange={setDate} />
+                            <DateRangeWithInputs date={date} onDateChange={setDate} />
                         )}
                          <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
                             <SelectTrigger className="w-full sm:w-[180px]">
