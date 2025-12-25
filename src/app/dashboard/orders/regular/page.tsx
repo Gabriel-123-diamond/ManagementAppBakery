@@ -447,6 +447,7 @@ function ExportDialog({ children, onExport }: { children: React.ReactNode, onExp
           <Button onClick={() => { onExport({ dateRange: date, status }); setIsOpen(false); }}>Export to CSV</Button>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
   )
 }
 
