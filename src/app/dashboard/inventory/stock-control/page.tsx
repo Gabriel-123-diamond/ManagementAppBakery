@@ -41,7 +41,6 @@ import {
   History,
   Undo2,
   BookUser,
-  Edit,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -67,8 +66,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
-import { ProductEditDialog } from "../../components/product-edit-dialog";
-
 
 type User = {
     name: string;
@@ -92,14 +89,6 @@ type Product = {
   id: string;
   name: string;
   stock: number;
-  category: string;
-  price: number;
-  image: string;
-  'data-ai-hint': string;
-  costPrice?: number;
-  lowStockThreshold?: number;
-  minPrice?: number;
-  maxPrice?: number;
 };
 
 type Ingredient = {
@@ -108,6 +97,7 @@ type Ingredient = {
     unit: string;
     stock: number;
 };
+
 
 function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
     const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
@@ -140,6 +130,48 @@ function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | u
     )
 }
 
+function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: Transfer | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!transfer) return null;
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Transfer Details</DialogTitle>
+                     <DialogDescription>
+                        From {transfer.from_staff_name} to {transfer.to_staff_name}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4 max-h-96 overflow-y-auto">
+                    <div className="text-sm space-y-1">
+                        <div className="flex justify-between"><span>Date Initiated:</span><span>{transfer.date ? format(new Date(transfer.date), 'Pp') : 'N/A'}</span></div>
+                        <div className="flex justify-between"><span>Status:</span><Badge variant={transfer.status === 'pending' || transfer.status === 'pending_return' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' || transfer.status === 'return_completed' ? 'default' : 'destructive'}>{transfer.status.replace(/_/g, ' ')}</Badge></div>
+                        {transfer.time_received && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
+                        {transfer.time_completed && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
+                    </div>
+                    <Separator/>
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {transfer.items.map(item => (
+                                <TableRow key={item.productId}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {transfer.notes && (
+                        <div className="space-y-1">
+                            <h4 className="font-semibold text-sm">Notes</h4>
+                            <p className="text-sm p-2 bg-muted rounded-md">{transfer.notes}</p>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 function PaginationControls({
     visibleRows,
     setVisibleRows,
@@ -166,9 +198,9 @@ function PaginationControls({
             <Button variant={visibleRows === 50 ? "default" : "outline"} size="sm" onClick={() => setVisibleRows(50)}>50</Button>
             <Button variant={visibleRows === 'all' ? "default" : "outline"} size="sm" onClick={() => setVisibleRows('all')}>All ({totalRows})</Button>
              <div className="flex items-center gap-1">
-                <Input
-                    type="number"
-                    className="h-8 w-16"
+                <Input 
+                    type="number" 
+                    className="h-8 w-16" 
                     placeholder="Custom"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -477,48 +509,6 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
     );
 }
 
-function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: Transfer | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
-    if (!transfer) return null;
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Transfer Details</DialogTitle>
-                     <DialogDescription>
-                        From {transfer.from_staff_name} to {transfer.to_staff_name}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4 max-h-96 overflow-y-auto">
-                    <div className="text-sm space-y-1">
-                        <div className="flex justify-between"><span>Date Initiated:</span><span>{transfer.date ? format(new Date(transfer.date), 'Pp') : 'N/A'}</span></div>
-                        <div className="flex justify-between"><span>Status:</span><Badge variant={transfer.status === 'pending' || transfer.status === 'pending_return' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' || transfer.status === 'return_completed' ? 'default' : 'destructive'}>{transfer.status.replace(/_/g, ' ')}</Badge></div>
-                        {transfer.time_received && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
-                        {transfer.time_completed && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
-                    </div>
-                    <Separator/>
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {transfer.items.map(item => (
-                                <TableRow key={item.productId}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {transfer.notes && (
-                        <div className="space-y-1">
-                            <h4 className="font-semibold text-sm">Notes</h4>
-                            <p className="text-sm p-2 bg-muted rounded-md">{transfer.notes}</p>
-                        </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
 export default function StockControlPage() {
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
@@ -537,7 +527,6 @@ export default function StockControlPage() {
   const [pendingTransfers, setPendingTransfers] = useState<Transfer[]>([]);
   const [productionTransfers, setProductionTransfers] = useState<Transfer[]>([]);
   const [allProductionBatches, setAllProductionBatches] = useState<ProductionBatch[]>([]);
-  const [returnedStock, setReturnedStock] = useState<Transfer[]>([]);
   const [pendingBatches, setPendingBatches] = useState<ProductionBatch[]>([]);
   const [completedTransfers, setCompletedTransfers] = useState<Transfer[]>([]);
   const [myWasteLogs, setMyWasteLogs] = useState<WasteLog[]>([]);
@@ -551,7 +540,6 @@ export default function StockControlPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingBatches, setIsLoadingBatches] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingTransfer, setViewingTransfer] = useState<Transfer | null>(null);
 
 
@@ -577,29 +565,26 @@ export default function StockControlPage() {
             const staffSnapshot = await getDocs(staffQuery);
             setStaff(staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffMember)));
 
-            const productsSnapshot = await getDocs(collection(db, "products"));
-            setProducts(productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-
-
             const isSalesStaff = ['Delivery Staff', 'Showroom Staff'].includes(currentUser.role);
             if (isSalesStaff) {
                 const stockData = await getProductsForStaff(currentUser.staff_id);
                 setPersonalStock(stockData.map(d => ({productId: d.productId, productName: d.name, stock: d.stock})));
+            } else {
+                const productsSnapshot = await getDocs(collection(db, "products"));
+                setProducts(productsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, stock: doc.data().stock } as Product)));
             }
-
-            const [pendingData, completedData, wasteData, prodTransfers, ingredientsSnapshot, initiatedTransfersSnapshot, returnedStockSnapshot, allBatchesResult] = await Promise.all([
+            
+             const [pendingData, completedData, wasteData, prodTransfers, ingredientsSnapshot, initiatedTransfersSnapshot, allBatchesResult] = await Promise.all([
                 getPendingTransfersForStaff(currentUser.staff_id),
                 getCompletedTransfersForStaff(currentUser.staff_id),
                 getWasteLogsForStaff(currentUser.staff_id),
                 getProductionTransfers(),
                 getDocs(collection(db, "ingredients")),
                 getDocs(query(collection(db, "transfers"), orderBy("date", "desc"))),
-                getReturnedStockTransfers(),
                 getProductionBatches(),
             ]);
 
             const allBatches = [...allBatchesResult.pending, ...allBatchesResult.in_production, ...allBatchesResult.completed, ...allBatchesResult.other];
-
 
             setPendingTransfers(pendingData);
             setCompletedTransfers(completedData);
@@ -607,7 +592,6 @@ export default function StockControlPage() {
             setProductionTransfers(prodTransfers);
             setIngredients(ingredientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, unit: doc.data().unit, stock: doc.data().stock } as Ingredient)));
             setInitiatedTransfers(initiatedTransfersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), date: (doc.data().date as Timestamp).toDate().toISOString() } as Transfer)));
-            setReturnedStock(returnedStockSnapshot);
             setAllProductionBatches(allBatches);
 
         } catch (error) {
@@ -623,10 +607,9 @@ export default function StockControlPage() {
 
     const userStr = localStorage.getItem('loggedInUser');
     if (userStr) {
-      const currentUser = JSON.parse(userStr);
       const qPendingBatches = query(collection(db, 'production_batches'), where('status', '==', 'pending_approval'));
       const unsubBatches = onSnapshot(qPendingBatches, (snapshot) => {
-          setPendingBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate().toISOString() } as ProductionBatch)));
+          setPendingBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString() } as ProductionBatch)));
           setIsLoadingBatches(false);
       });
 
@@ -776,7 +759,7 @@ export default function StockControlPage() {
   }, [allPendingTransfers, visibleAllPendingRows]);
   
   const paginatedInitiatedLogs = useMemo(() => {
-    let filtered = initiatedTransfers.filter(t => t.from_staff_id === user?.staff_id && !t.notes?.includes('Return from production batch'));
+    let filtered = initiatedTransfers.filter(t => !t.notes?.includes('Return from production batch'));
     if (date?.from) {
         const from = startOfDay(date.from);
         const to = date.to ? endOfDay(date.to) : endOfDay(date.from);
@@ -786,17 +769,17 @@ export default function StockControlPage() {
         })
     }
     return visibleLogRows === 'all' ? filtered : filtered.slice(0, visibleLogRows);
-  }, [initiatedTransfers, visibleLogRows, date, user]);
+  }, [initiatedTransfers, visibleLogRows, date]);
 
   const paginatedProductionTransferLogs = useMemo(() => {
-    let filtered = initiatedTransfers.filter(t => t.notes?.includes('Return from production batch') && t.to_staff_id === user?.staff_id);
+    let filtered = initiatedTransfers.filter(t => t.notes?.includes('Return from production batch'));
     if (prodTransferDate?.from) {
         const from = startOfDay(prodTransferDate.from);
         const to = prodTransferDate.to ? endOfDay(prodTransferDate.to) : endOfDay(prodTransferDate.from);
         filtered = filtered.filter(t => new Date(t.date) >= from && new Date(t.date) <= to);
     }
     return visibleProdTransferRows === 'all' ? filtered : filtered.slice(0, visibleProdTransferRows);
-  }, [initiatedTransfers, user, prodTransferDate, visibleProdTransferRows]);
+  }, [initiatedTransfers, prodTransferDate, visibleProdTransferRows]);
 
   const paginatedBatchApprovalLogs = useMemo(() => {
     let filtered = allProductionBatches.filter(b => b.status === 'completed' || b.status === 'declined');
@@ -807,7 +790,7 @@ export default function StockControlPage() {
     }
     return visibleBatchApprovalRows === 'all' ? filtered : filtered.slice(0, visibleBatchApprovalRows);
   }, [allProductionBatches, batchApprovalDate, visibleBatchApprovalRows]);
-
+  
   const getAvailableProductsForRow = (rowIndex: number) => {
     const selectedIdsInOtherRows = new Set(
         items.filter((_, i) => i !== rowIndex).map(item => item.productId)
@@ -815,91 +798,33 @@ export default function StockControlPage() {
     return products.filter(p => !selectedIdsInOtherRows.has(p.id));
   };
 
-  const productCategories = useMemo(() => ['All', ...new Set(products.map(p => p.category))], [products]);
-
-
   const userRole = user?.role;
   const isManagerOrDev = userRole === 'Manager' || userRole === 'Developer';
+  const isAccountant = userRole === 'Accountant';
   const isStorekeeper = userRole === 'Storekeeper';
-  const isBaker = userRole === 'Baker' || userRole === 'Chief Baker';
   const canInitiateTransfer = isManagerOrDev || isStorekeeper;
   
   if (!user || isLoading) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
-
+  
   if (!canInitiateTransfer) {
      return (
-        <div className="space-y-6">
-             <ProductEditDialog
-                product={editingProduct}
-                onOpenChange={() => setEditingProduct(null)}
-                onProductUpdate={fetchPageData}
-                user={user}
-                categories={productCategories}
-             />
+         <div className="space-y-6">
             <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
-            <Tabs defaultValue="my-stock" className="w-full">
-                <TabsList>
-                    <TabsTrigger value="my-stock">My Stock</TabsTrigger>
-                    <TabsTrigger value="acknowledge-stock" className="relative">
-                        Acknowledge Stock
-                        {pendingTransfers.length > 0 && <Badge variant="destructive" className="ml-2">{pendingTransfers.length}</Badge>}
-                    </TabsTrigger>
-                    <TabsTrigger value="history">History</TabsTrigger>
-                </TabsList>
-                <TabsContent value="my-stock" className="mt-4">
-                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                        <div className="lg:col-span-2 flex flex-col gap-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>My Personal Stock</CardTitle>
-                                    <CardDescription>Items currently in your possession.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <Table>
-                                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead>{user.role === 'Developer' && <TableHead></TableHead>}</TableRow></TableHeader>
-                                        <TableBody>
-                                            {personalStock.length === 0 ? (
-                                                <TableRow><TableCell colSpan={user.role === 'Developer' ? 3 : 2} className="h-24 text-center">Your personal stock is empty.</TableCell></TableRow>
-                                            ) : (
-                                                personalStock.map(item => {
-                                                    const fullProduct = products.find(p => p.id === item.productId);
-                                                    return (
-                                                    <TableRow key={item.productId}>
-                                                        <TableCell>{item.productName}</TableCell>
-                                                        <TableCell className="text-right">{item.stock}</TableCell>
-                                                        {user.role === 'Developer' && (
-                                                            <TableCell className="text-right">
-                                                                <Button variant="ghost" size="icon" onClick={() => setEditingProduct(fullProduct!)}>
-                                                                    <Edit className="h-4 w-4" />
-                                                                </Button>
-                                                            </TableCell>
-                                                        )}
-                                                    </TableRow>
-                                                )})
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </CardContent>
-                            </Card>
-                        </div>
-                        <div className="lg:col-span-1 flex flex-col gap-6">
-                            <ReportWasteTab products={personalStock} user={user} onWasteReported={fetchPageData} />
-                        </div>
-                    </div>
-                </TabsContent>
-                <TabsContent value="acknowledge-stock" className="mt-4">
-                     <Card>
+            <div className="flex flex-col lg:flex-row gap-6">
+                 <div className="flex flex-col gap-6 flex-[2]">
+                    <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Package />
                                 Acknowledge Incoming Stock
+                                {pendingTransfers.length > 0 && <Badge variant="destructive">{pendingTransfers.length}</Badge>}
                             </CardTitle>
                             <CardDescription>Review and acknowledge stock transferred to you. Accepted Sales Runs will appear in your "Deliveries" tab.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="md:hidden space-y-4">
+                           <div className="md:hidden space-y-4">
                                 {isLoading ? (
                                     <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div>
                                 ) : paginatedPending.length === 0 ? (
@@ -927,57 +852,56 @@ export default function StockControlPage() {
                                 )}
                             </div>
                             <div className="hidden md:block">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>From</TableHead>
-                                            <TableHead>Type</TableHead>
-                                            <TableHead>Items</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {isLoading ? (
-                                            <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
-                                        ) : paginatedPending.length === 0 ? (
-                                            <TableRow><TableCell colSpan={5} className="h-24 text-center">No pending transfers.</TableCell></TableRow>
-                                        ) : (
-                                            paginatedPending.map(t => (
-                                                <TableRow key={t.id}>
-                                                    <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
-                                                    <TableCell>{t.from_staff_name}</TableCell>
-                                                    <TableCell>
-                                                        {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {t.items.reduce((sum, item) => sum + item.quantity, 0)} items
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                         <AcceptTransferDialog transfer={t} onAccept={handleAcknowledge}>
-                                                            <Button size="sm">View & Acknowledge</Button>
-                                                        </AcceptTransferDialog>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>From</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Items</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
+                                    ) : paginatedPending.length === 0 ? (
+                                        <TableRow><TableCell colSpan={5} className="h-24 text-center">No pending transfers.</TableCell></TableRow>
+                                    ) : (
+                                        paginatedPending.map(t => (
+                                            <TableRow key={t.id}>
+                                                <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
+                                                <TableCell>{t.from_staff_name}</TableCell>
+                                                <TableCell>
+                                                    {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {t.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <AcceptTransferDialog transfer={t} onAccept={handleAcknowledge}>
+                                                        <Button size="sm">View & Acknowledge</Button>
+                                                    </AcceptTransferDialog>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
                             </div>
                         </CardContent>
                         <CardFooter>
                             <PaginationControls visibleRows={visiblePendingRows} setVisibleRows={setVisiblePendingRows} totalRows={pendingTransfers.length} />
                         </CardFooter>
                     </Card>
-                </TabsContent>
-                <TabsContent value="history" className="mt-4">
-                     <Card>
+
+                    <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><History /> My Transfer History</CardTitle>
                             <CardDescription>A log of all stock transfers you have successfully accepted.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="md:hidden space-y-4">
+                             <div className="md:hidden space-y-4">
                                 {paginatedHistory.map(t => (
                                     <Card key={t.id} className="p-4 space-y-2">
                                          <div className="flex justify-between items-start">
@@ -999,52 +923,55 @@ export default function StockControlPage() {
                                 ))}
                             </div>
                             <div className="hidden md:block">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Received</TableHead>
-                                            <TableHead>Completed</TableHead>
-                                            <TableHead>From</TableHead>
-                                            <TableHead>Type</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Action</TableHead>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Received</TableHead>
+                                        <TableHead>Completed</TableHead>
+                                        <TableHead>From</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
+                                ) : paginatedHistory.length === 0 ? (
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">You have no completed transfers.</TableCell></TableRow>
+                                ) : (
+                                    paginatedHistory.map(t => (
+                                        <TableRow key={t.id}>
+                                            <TableCell>{t.time_received ? format(new Date(t.time_received), 'Pp') : 'N/A'}</TableCell>
+                                            <TableCell>{t.time_completed ? format(new Date(t.time_completed), 'Pp') : 'N/A'}</TableCell>
+                                            <TableCell>{t.from_staff_name}</TableCell>
+                                            <TableCell>
+                                                {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
+                                            </TableCell>
+                                            <TableCell><Badge>{t.status}</Badge></TableCell>
+                                            <TableCell className="text-right">
+                                                {t.is_sales_run && t.status === 'active' && (
+                                                    <Button variant="outline" size="sm" asChild>
+                                                        <Link href={`/dashboard/sales-runs?runId=${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
+                                                    </Button>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {isLoading ? (
-                                        <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
-                                    ) : paginatedHistory.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="h-24 text-center">You have no completed transfers.</TableCell></TableRow>
-                                    ) : (
-                                        paginatedHistory.map(t => (
-                                            <TableRow key={t.id}>
-                                                <TableCell>{t.time_received ? format(new Date(t.time_received), 'Pp') : 'N/A'}</TableCell>
-                                                <TableCell>{t.time_completed ? format(new Date(t.time_completed), 'Pp') : 'N/A'}</TableCell>
-                                                <TableCell>{t.from_staff_name}</TableCell>
-                                                <TableCell>
-                                                    {t.is_sales_run ? <Badge variant="secondary"><Truck className="h-3 w-3 mr-1" />Sales Run</Badge> : <Badge variant="outline"><Package className="h-3 w-3 mr-1"/>Stock</Badge>}
-                                                </TableCell>
-                                                <TableCell><Badge>{t.status}</Badge></TableCell>
-                                                <TableCell className="text-right">
-                                                    {t.is_sales_run && t.status === 'active' && (
-                                                        <Button variant="outline" size="sm" asChild>
-                                                            <Link href={`/dashboard/sales-runs?runId=${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
-                                                        </Button>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                    </TableBody>
-                                </Table>
+                                    ))
+                                )}
+                                </TableBody>
+                            </Table>
                             </div>
                         </CardContent>
                          <CardFooter>
                             <PaginationControls visibleRows={visibleHistoryRows} setVisibleRows={setVisibleHistoryRows} totalRows={completedTransfers.length} />
                         </CardFooter>
                     </Card>
-                </TabsContent>
-            </Tabs>
+                </div>
+                <div className="flex-1">
+                    <ReportWasteTab products={personalStock} user={user} onWasteReported={fetchPageData} />
+                </div>
+            </div>
          </div>
      )
   }
@@ -1056,7 +983,7 @@ export default function StockControlPage() {
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
       </div>
-      <Tabs defaultValue={isManagerOrDev ? "pending-transfers" : "initiate-transfer"}>
+      <Tabs defaultValue={isManagerOrDev ? "log" : "initiate-transfer"}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
                 {isStorekeeper &&
@@ -1072,8 +999,8 @@ export default function StockControlPage() {
                         </Badge>
                     )}
                 </TabsTrigger>
-                <TabsTrigger value="logs" className="relative">
-                    <History className="mr-2 h-4 w-4"/> Logs
+                 <TabsTrigger value="log" className="relative">
+                    <History className="mr-2 h-4 w-4"/> Log
                 </TabsTrigger>
             </TabsList>
         </div>
@@ -1240,7 +1167,7 @@ export default function StockControlPage() {
                 </CardFooter>
               </Card>
         </TabsContent>
-        <TabsContent value="logs">
+         <TabsContent value="log">
             <Card>
                 <CardHeader>
                     <CardTitle>Stock Control Log</CardTitle>
@@ -1266,7 +1193,7 @@ export default function StockControlPage() {
                                             <TableCell>{t.from_staff_name}</TableCell>
                                             <TableCell>{t.to_staff_name}</TableCell>
                                             <TableCell>{t.items.reduce((s,i) => s + i.quantity, 0)}</TableCell>
-                                            <TableCell><Badge variant={t.status === 'pending' ? 'secondary' : t.status === 'completed' || t.status === 'active' || t.status === 'return_completed' ? 'default' : 'destructive'}>{t.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                            <TableCell><Badge variant={t.status === 'pending' || t.status === 'pending_return' ? 'secondary' : t.status === 'completed' || t.status === 'active' || t.status === 'return_completed' ? 'default' : 'destructive'}>{t.status.replace(/_/g, ' ')}</Badge></TableCell>
                                             <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setViewingTransfer(t)}><Eye className="h-4 w-4"/></Button></TableCell>
                                         </TableRow>
                                     ))}
@@ -1324,7 +1251,6 @@ export default function StockControlPage() {
             </Card>
           </TabsContent>
       </Tabs>
-
     </div>
   );
 }
