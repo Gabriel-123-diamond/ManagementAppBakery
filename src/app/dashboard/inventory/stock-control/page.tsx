@@ -28,15 +28,12 @@ import {
   Package,
   ArrowRightLeft,
   Wrench,
-  Trash,
   Hourglass,
   Loader2,
   Check,
-  X,
   Truck,
   Eye,
   CheckCircle,
-  XCircle,
   History,
   CalendarIcon,
 } from "lucide-react";
@@ -61,7 +58,6 @@ import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff,
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -164,7 +160,7 @@ function BatchDetailsDialog({ batch, isOpen, onOpenChange }: { batch: Production
                 <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
                     <div className="text-sm space-y-1">
                         <p><strong>Recipe:</strong> {batch.recipeName}</p>
-                        <p><strong>Status:</strong> <Badge variant={batch.status === 'pending_approval' ? 'secondary' : batch.status === 'completed' ? 'default' : 'destructive'}>{batch.status.replace(/_/g, ' ')}</Badge></p>
+                        <div><strong>Status:</strong> <Badge variant={batch.status === 'pending_approval' ? 'secondary' : batch.status === 'completed' ? 'default' : 'destructive'}>{batch.status.replace(/_/g, ' ')}</Badge></div>
                     </div>
                     
                     {batch.ingredients?.length > 0 && (
@@ -230,6 +226,7 @@ function BatchDetailsDialog({ batch, isOpen, onOpenChange }: { batch: Production
         </Dialog>
     );
 }
+
 
 function PaginationControls({
     visibleRows,
@@ -509,7 +506,7 @@ function ReportWasteTab({ products, user, onWasteReported }: { products: { produ
     return (
         <Card className="flex-1">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Trash /> Report Spoiled or Damaged Stock</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Trash2 /> Report Spoiled or Damaged Stock</CardTitle>
                 <CardDescription>
                     Use this form to report any items that are no longer sellable from your personal stock. This will deduct the items from your inventory.
                 </CardDescription>
@@ -951,7 +948,7 @@ export default function StockControlPage() {
                                             <TableCell className="text-right">
                                                 {t.is_sales_run && t.status === 'active' && (
                                                     <Button variant="outline" size="sm" asChild>
-                                                        <Link href={`/dashboard/deliveries`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
+                                                        <Link href={`/dashboard/sales-runs?runId=${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
                                                     </Button>
                                                 )}
                                             </TableCell>
