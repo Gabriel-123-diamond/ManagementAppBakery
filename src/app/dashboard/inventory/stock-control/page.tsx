@@ -57,7 +57,7 @@ import { cn } from "@/lib/utils";
 import { collection, getDocs, query, where, orderBy, Timestamp, getDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getProductionBatches, getProductionBatch } from "@/app/actions";
+import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getProductionBatches, getProductionBatch, getStaffList } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -113,8 +113,8 @@ function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: T
                     <div className="text-sm space-y-1">
                         <div className="flex justify-between"><span>Date Initiated:</span><span>{transfer.date ? format(new Date(transfer.date), 'Pp') : 'N/A'}</span></div>
                         <div className="flex justify-between"><span>Status:</span><Badge variant={transfer.status === 'pending' || transfer.status === 'pending_return' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' || transfer.status === 'return_completed' ? 'default' : 'destructive'}>{transfer.status.replace(/_/g, ' ')}</Badge></div>
-                        {transfer.time_received && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
-                        {transfer.time_completed && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
+                        {transfer.time_received && typeof transfer.time_received === 'string' && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
+                        {transfer.time_completed && typeof transfer.time_completed === 'string' && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
                     </div>
                     <Separator/>
                     <h4 className="font-semibold">Items Transferred</h4>
@@ -806,11 +806,6 @@ export default function StockControlPage() {
     }
     setIsSubmitting(false);
   };
-  
-  const handleViewBatchDetails = async (batchId: string) => {
-    const batch = await getProductionBatch(batchId);
-    setViewingBatch(batch);
-  };
 
   const paginatedPending = useMemo(() => {
     return visiblePendingRows === 'all' ? pendingTransfers : pendingTransfers.slice(0, visiblePendingRows);
@@ -990,10 +985,10 @@ export default function StockControlPage() {
       <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' || userRole === 'Accountant' ? 'log' : 'initiate-transfer'}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
-                <TabsTrigger value="log" className="relative">
+                 <TabsTrigger value="log" className="relative">
                     <History className="mr-2 h-4 w-4"/> Log
                 </TabsTrigger>
-                {!isStorekeeper && 
+                {isStorekeeper && 
                     <TabsTrigger value="initiate-transfer">
                         <Send className="mr-2 h-4 w-4" /> Initiate Transfer
                     </TabsTrigger>
@@ -1274,4 +1269,3 @@ export default function StockControlPage() {
     </div>
   );
 }
-
