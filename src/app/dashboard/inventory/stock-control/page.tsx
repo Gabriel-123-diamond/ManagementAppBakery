@@ -189,6 +189,37 @@ function PaginationControls({
     )
 }
 
+function DateRangeFilter({ date, setDate }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void }) {
+    const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
+    const [isOpen, setIsOpen] = useState(false);
+
+    useEffect(() => {
+        setTempDate(date);
+    }, [date]);
+
+    const handleApply = () => {
+        setDate(tempDate);
+        setIsOpen(false);
+    }
+
+    return (
+         <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverTrigger asChild>
+                <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal",!date && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date?.from ? ( date.to ? (<>{format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")} </>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+                <Calendar initialFocus mode="range" defaultMonth={tempDate?.from} selected={tempDate} onSelect={setTempDate} numberOfMonths={1}/>
+                <div className="p-2 border-t flex justify-end">
+                    <Button onClick={handleApply}>Apply</Button>
+                </div>
+            </PopoverContent>
+        </Popover>
+    )
+}
+
 function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch: ProductionBatch, user: User, allIngredients: Ingredient[], onApproval: () => void }) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
@@ -504,7 +535,7 @@ export default function StockControlPage() {
             setStaff(staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffMember)));
 
             const userRole = currentUser.role;
-            if (userRole === 'Manager' || userRole === 'Supervisor' || userRole === 'Storekeeper') {
+            if (userRole === 'Manager' || userRole === 'Supervisor' || userRole === 'Storekeeper' || userRole === 'Developer') {
                 const productsSnapshot = await getDocs(collection(db, "products"));
                 setProducts(productsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, stock: doc.data().stock } as Product)));
             } else if (userRole === 'Delivery Staff') {
@@ -875,17 +906,22 @@ export default function StockControlPage() {
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
       </div>
-      <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' ? "log" : "initiate-transfer"}>
+      <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' || userRole === 'Accountant' ? "log" : "initiate-transfer"}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
+                <TabsTrigger value="log" className="relative">
+                    <History className="mr-2 h-4 w-4"/> Log
+                    {userRole !== 'Manager' && userRole !== 'Developer' && userRole !== 'Accountant' && allPendingTransfers.length > 0 && (
+                        <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0">
+                            {allPendingTransfers.length}
+                        </Badge>
+                    )}
+                </TabsTrigger>
                 {isStorekeeper &&
                     <TabsTrigger value="initiate-transfer">
                         <Send className="mr-2 h-4 w-4" /> Initiate Transfer
                     </TabsTrigger>
                 }
-                 <TabsTrigger value="log" className="relative">
-                    <History className="mr-2 h-4 w-4"/> Log
-                </TabsTrigger>
             </TabsList>
         </div>
         <TabsContent value="initiate-transfer">
@@ -1012,21 +1048,12 @@ export default function StockControlPage() {
                     <Tabs defaultValue="initiated">
                         <TabsList>
                             <TabsTrigger value="initiated">Initiated Transfers</TabsTrigger>
-                            <TabsTrigger value="batch-approvals">Batch Approvals</TabsTrigger>
+                            <TabsTrigger value="production">Production Transfers</TabsTrigger>
+                            <TabsTrigger value="batches">Batch Approvals</TabsTrigger>
                         </TabsList>
                         <TabsContent value="initiated" className="mt-4">
                             <div className="flex justify-end mb-4">
-                               <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !date && "text-muted-foreground")}>
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {date?.from ? (date.to ? (<>{format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}</>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="end">
-                                        <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={2} />
-                                    </PopoverContent>
-                                </Popover>
+                               <DateRangeFilter date={date} setDate={setDate} />
                             </div>
                             <Table>
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
@@ -1047,7 +1074,41 @@ export default function StockControlPage() {
                                 <PaginationControls visibleRows={visibleLogRows} setVisibleRows={setVisibleLogRows} totalRows={paginatedInitiatedLogs.length} />
                             </CardFooter>
                         </TabsContent>
-                         <TabsContent value="batch-approvals" className="mt-4">
+                         <TabsContent value="production" className="mt-4">
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>From</TableHead>
+                                        <TableHead>Product</TableHead>
+                                        <TableHead>Quantity</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
+                                    ) : productionTransfers.length > 0 ? (
+                                        productionTransfers.map(t => (
+                                            <TableRow key={t.id}>
+                                                <TableCell>{format(new Date(t.date), 'Pp')}</TableCell>
+                                                <TableCell>{t.from_staff_name}</TableCell>
+                                                <TableCell>{t.items[0]?.productName}</TableCell>
+                                                <TableCell>{t.items[0]?.quantity}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button size="sm" onClick={() => handleAcknowledge(t.id, 'accept')}>
+                                                        <Check className="mr-2 h-4 w-4" /> Accept
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow><TableCell colSpan={5} className="h-24 text-center">No pending transfers from production.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TabsContent>
+                        <TabsContent value="batches" className="mt-4">
                              <Table>
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                 <TableBody>
@@ -1057,7 +1118,12 @@ export default function StockControlPage() {
                                             <TableCell>{batch.recipeName}</TableCell>
                                             <TableCell>{batch.requestedByName}</TableCell>
                                             <TableCell><Badge variant={batch.status === 'pending_approval' ? 'secondary' : batch.status === 'completed' ? 'default' : 'destructive'}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                            <TableCell><Button size="sm" variant="ghost">View Details</Button></TableCell>
+                                            <TableCell>
+                                                {batch.status === 'pending_approval' ?
+                                                    <ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchPageData} />
+                                                    : <Button size="sm" variant="ghost">View Details</Button>
+                                                }
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -1071,3 +1137,6 @@ export default function StockControlPage() {
     </div>
   );
 }
+
+
+    
