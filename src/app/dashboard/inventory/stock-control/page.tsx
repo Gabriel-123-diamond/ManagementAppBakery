@@ -38,6 +38,7 @@ import {
   CheckCircle,
   XCircle,
   History,
+  CalendarIcon,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -62,7 +63,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 type User = {
     name: string;
@@ -95,6 +97,57 @@ type Ingredient = {
     stock: number;
 };
 
+function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: Transfer | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!transfer) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Transfer Details: {transfer.id.substring(0, 6).toUpperCase()}</DialogTitle>
+                    <DialogDescription>
+                        Details for transfer from {transfer.from_staff_name} to {transfer.to_staff_name}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="text-sm space-y-1">
+                        <div className="flex justify-between"><span>Date Initiated:</span><span>{format(new Date(transfer.date), 'Pp')}</span></div>
+                        <div className="flex justify-between"><span>Status:</span><Badge variant={transfer.status === 'pending' || transfer.status === 'pending_return' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' || transfer.status === 'return_completed' ? 'default' : 'destructive'}>{transfer.status.replace(/_/g, ' ')}</Badge></div>
+                        {transfer.time_received && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
+                        {transfer.time_completed && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
+                    </div>
+                    <Separator/>
+                    <h4 className="font-semibold">Items Transferred</h4>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Product</TableHead>
+                                <TableHead className="text-right">Quantity</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {transfer.items.map(item => (
+                                <TableRow key={item.productId}>
+                                    <TableCell>{item.productName}</TableCell>
+                                    <TableCell className="text-right">{item.quantity}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {transfer.notes && (
+                         <div className="text-sm space-y-1 pt-2">
+                            <p className="font-semibold">Notes from Sender:</p>
+                            <p className="p-2 bg-muted rounded-md">{transfer.notes}</p>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 function PaginationControls({
     visibleRows,
@@ -433,6 +486,7 @@ export default function StockControlPage() {
   const [visibleHistoryRows, setVisibleHistoryRows] = useState<number | 'all'>(10);
   const [visibleLogRows, setVisibleLogRows] = useState<number | 'all'>(10);
   const [visibleAllPendingRows, setVisibleAllPendingRows] = useState<number | 'all'>(10);
+  const [viewingTransfer, setViewingTransfer] = useState<Transfer | null>(null);
   
   const fetchPageData = async () => {
         const userStr = localStorage.getItem('loggedInUser');
@@ -814,6 +868,7 @@ export default function StockControlPage() {
   }
 
   // Full view for admins
+  const isStorekeeper = userRole === 'Storekeeper';
   return (
     <div className="flex flex-col gap-4">
        <TransferDetailsDialog transfer={viewingTransfer} isOpen={!!viewingTransfer} onOpenChange={() => setViewingTransfer(null)} />
@@ -823,22 +878,12 @@ export default function StockControlPage() {
       <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' ? "log" : "initiate-transfer"}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
-                {(userRole === 'Storekeeper' || userRole === 'Developer') && 
+                {isStorekeeper &&
                     <TabsTrigger value="initiate-transfer">
                         <Send className="mr-2 h-4 w-4" /> Initiate Transfer
                     </TabsTrigger>
                 }
-                 {(userRole === 'Storekeeper' || userRole === 'Developer' || userRole === 'Manager') && 
-                    <TabsTrigger value="batch-approvals" className="relative">
-                        <Wrench className="mr-2 h-4 w-4" /> Batch Approvals
-                        {pendingBatches.length > 0 && (
-                            <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0">
-                                {pendingBatches.length}
-                            </Badge>
-                        )}
-                    </TabsTrigger>
-                }
-                <TabsTrigger value="log" className="relative">
+                 <TabsTrigger value="log" className="relative">
                     <History className="mr-2 h-4 w-4"/> Log
                 </TabsTrigger>
             </TabsList>
@@ -957,31 +1002,6 @@ export default function StockControlPage() {
             </CardContent>
         </Card>
         </TabsContent>
-         <TabsContent value="batch-approvals">
-             <Card>
-                <CardHeader>
-                    <CardTitle>Pending Batch Approvals</CardTitle>
-                    <CardDescription>Batches requested by bakers that need ingredient approval from the storekeeper.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {isLoadingBatches ? (
-                                 <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
-                            ) : pendingBatches.length > 0 ? pendingBatches.map(batch => (
-                                <TableRow key={batch.id}>
-                                    <TableCell>{format(new Date(batch.createdAt), 'PPP')}</TableCell>
-                                    <TableCell>{batch.recipeName}</TableCell>
-                                    <TableCell>{batch.requestedByName}</TableCell>
-                                    <TableCell><ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchPageData} /></TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No batches are pending approval.</TableCell></TableRow>}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-              </Card>
-        </TabsContent>
           <TabsContent value="log">
             <Card>
                 <CardHeader>
@@ -992,12 +1012,21 @@ export default function StockControlPage() {
                     <Tabs defaultValue="initiated">
                         <TabsList>
                             <TabsTrigger value="initiated">Initiated Transfers</TabsTrigger>
-                            <TabsTrigger value="prod-transfers">Production Transfers</TabsTrigger>
                             <TabsTrigger value="batch-approvals">Batch Approvals</TabsTrigger>
                         </TabsList>
                         <TabsContent value="initiated" className="mt-4">
                             <div className="flex justify-end mb-4">
-                                <DateRangePicker date={date} onDateChange={setDate} />
+                               <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !date && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {date?.from ? (date.to ? (<>{format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}</>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="end">
+                                        <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={2} />
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <Table>
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
@@ -1017,6 +1046,22 @@ export default function StockControlPage() {
                             <CardFooter className="pt-4">
                                 <PaginationControls visibleRows={visibleLogRows} setVisibleRows={setVisibleLogRows} totalRows={paginatedInitiatedLogs.length} />
                             </CardFooter>
+                        </TabsContent>
+                         <TabsContent value="batch-approvals" className="mt-4">
+                             <Table>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {allProductionBatches.map(batch => (
+                                         <TableRow key={batch.id}>
+                                            <TableCell>{format(new Date(batch.createdAt), 'PPP')}</TableCell>
+                                            <TableCell>{batch.recipeName}</TableCell>
+                                            <TableCell>{batch.requestedByName}</TableCell>
+                                            <TableCell><Badge variant={batch.status === 'pending_approval' ? 'secondary' : batch.status === 'completed' ? 'default' : 'destructive'}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                            <TableCell><Button size="sm" variant="ghost">View Details</Button></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         </TabsContent>
                     </Tabs>
                 </CardContent>
