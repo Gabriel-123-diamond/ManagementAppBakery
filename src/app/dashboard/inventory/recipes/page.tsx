@@ -40,7 +40,7 @@ import { collection, onSnapshot, query, orderBy, where, doc, addDoc, getDoc, upd
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { startProductionBatch, approveIngredientRequest, declineProductionBatch, completeProductionBatch, ProductionBatch, ProductionLog, getRecipes, getProducts, getIngredients, getStaffByRole, getProductionBatch, getProductionLogs, handleSaveRecipe, handleDeleteRecipe, cancelProductionBatch, getProductionBatches, Transfer } from "@/app/actions";
+import { startProductionBatch, approveIngredientRequest, declineProductionBatch, completeProductionBatch, ProductionBatch, ProductionLog, getRecipes, getProducts, getIngredients, getStaffByRole, getProductionBatch, getProductionLogs, handleSaveRecipe, handleDeleteRecipe, cancelProductionBatch, getProductionBatches, Transfer, getStaffList } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay, endOfDay } from "date-fns";
@@ -549,7 +549,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
     );
 }
 
-function StartProductionDialog({ recipes, onStart, isSubmitting, user }: { recipes: Recipe[], onStart: (recipe: Recipe, batchSize: 'full' | 'half', productName: string, productId: string) => void, isSubmitting: boolean, user: User }) {
+function StartProductionDialog({ recipes, onStart, isSubmitting, user }: { recipes: Recipe[], onStart: (recipe: Recipe, batchSize: 'full' | 'half') => void, isSubmitting: boolean, user: User }) {
     const [isOpen, setIsOpen] = useState(false);
     
     return (
@@ -572,8 +572,8 @@ function StartProductionDialog({ recipes, onStart, isSubmitting, user }: { recip
                                 <p className="text-sm text-muted-foreground">{recipe.ingredients.length} ingredients</p>
                             </div>
                             <div className="flex gap-2">
-                                <Button size="sm" onClick={() => onStart(recipe, 'half', recipe.name, recipe.id)} disabled={isSubmitting}>Half</Button>
-                                <Button size="sm" onClick={() => onStart(recipe, 'full', recipe.name, recipe.id)} disabled={isSubmitting}>
+                                <Button size="sm" onClick={() => { onStart(recipe, 'half'); setIsOpen(false); }} disabled={isSubmitting}>Half</Button>
+                                <Button size="sm" onClick={() => { onStart(recipe, 'full'); setIsOpen(false); }} disabled={isSubmitting}>
                                     {isSubmitting && <Loader2 className="h-4 w-4 animate-spin"/>}
                                     Full
                                 </Button>
@@ -894,7 +894,6 @@ export default function RecipesPage() {
             toast({ variant: 'destructive', title: 'Error', description: result.error});
         }
         setIsSubmitting(false);
-        return result.success;
     }
 
     const handleCancelRequest = async (batchId: string) => {
@@ -1233,4 +1232,5 @@ export default function RecipesPage() {
 
 
 
+    
     
