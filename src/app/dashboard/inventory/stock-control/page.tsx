@@ -57,7 +57,7 @@ import { cn } from "@/lib/utils";
 import { collection, getDocs, query, where, orderBy, Timestamp, getDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getProductionBatches } from "@/app/actions";
+import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff, handleAcknowledgeTransfer, Transfer, getCompletedTransfersForStaff, WasteLog, getWasteLogsForStaff, getProductionTransfers, ProductionBatch, approveIngredientRequest, declineProductionBatch, getProducts, getProductionBatches, getProductionBatch } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -111,7 +111,7 @@ function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: T
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     <div className="text-sm space-y-1">
-                        <div className="flex justify-between"><span>Date Initiated:</span><span>{format(new Date(transfer.date), 'Pp')}</span></div>
+                        <div className="flex justify-between"><span>Date Initiated:</span><span>{transfer.date ? format(new Date(transfer.date), 'Pp') : 'N/A'}</span></div>
                         <div className="flex justify-between"><span>Status:</span><Badge variant={transfer.status === 'pending' || transfer.status === 'pending_return' ? 'secondary' : transfer.status === 'completed' || transfer.status === 'active' || transfer.status === 'return_completed' ? 'default' : 'destructive'}>{transfer.status.replace(/_/g, ' ')}</Badge></div>
                         {transfer.time_received && <div className="flex justify-between"><span>Time Received:</span><span>{format(new Date(transfer.time_received), 'Pp')}</span></div>}
                         {transfer.time_completed && <div className="flex justify-between"><span>Time Completed:</span><span>{format(new Date(transfer.time_completed), 'Pp')}</span></div>}
@@ -189,7 +189,7 @@ function PaginationControls({
     )
 }
 
-function DateRangeFilter({ date, setDate }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void }) {
+function DateRangeFilter({ date, setDate, align = 'end' }: { date: DateRange | undefined, setDate: (date: DateRange | undefined) => void, align?: "start" | "center" | "end" }) {
     const [tempDate, setTempDate] = useState<DateRange | undefined>(date);
     const [isOpen, setIsOpen] = useState(false);
 
@@ -210,7 +210,7 @@ function DateRangeFilter({ date, setDate }: { date: DateRange | undefined, setDa
                     {date?.from ? ( date.to ? (<>{format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")} </>) : (format(date.from, "LLL dd, y"))) : (<span>Filter by date range</span>)}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
+            <PopoverContent className="w-auto p-0" align={align}>
                 <Calendar initialFocus mode="range" defaultMonth={tempDate?.from} selected={tempDate} onSelect={setTempDate} numberOfMonths={1}/>
                 <div className="p-2 border-t flex justify-end">
                     <Button onClick={handleApply}>Apply</Button>
@@ -502,7 +502,6 @@ export default function StockControlPage() {
   const [pendingTransfers, setPendingTransfers] = useState<Transfer[]>([]);
   const [productionTransfers, setProductionTransfers] = useState<Transfer[]>([]);
   const [allProductionBatches, setAllProductionBatches] = useState<ProductionBatch[]>([]);
-  const [pendingBatches, setPendingBatches] = useState<ProductionBatch[]>([]);
   const [completedTransfers, setCompletedTransfers] = useState<Transfer[]>([]);
   const [myWasteLogs, setMyWasteLogs] = useState<WasteLog[]>([]);
   
@@ -518,6 +517,7 @@ export default function StockControlPage() {
   const [visibleLogRows, setVisibleLogRows] = useState<number | 'all'>(10);
   const [visibleAllPendingRows, setVisibleAllPendingRows] = useState<number | 'all'>(10);
   const [viewingTransfer, setViewingTransfer] = useState<Transfer | null>(null);
+  const [viewingBatch, setViewingBatch] = useState<ProductionBatch | null>(null);
   
   const fetchPageData = async () => {
         const userStr = localStorage.getItem('loggedInUser');
@@ -563,6 +563,7 @@ export default function StockControlPage() {
             setIngredients(ingredientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, unit: doc.data().unit, stock: doc.data().stock } as Ingredient)));
             setInitiatedTransfers(initiatedTransfersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), date: (doc.data().date as Timestamp).toDate().toISOString() } as Transfer)));
             setAllProductionBatches(allBatches);
+            setIsLoadingBatches(false);
 
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -576,7 +577,6 @@ export default function StockControlPage() {
     setIsLoading(true);
     fetchPageData();
 
-    setIsLoadingBatches(true);
     const userStr = localStorage.getItem('loggedInUser');
     if (userStr) {
         const currentUser = JSON.parse(userStr);
@@ -605,15 +605,8 @@ export default function StockControlPage() {
             setPendingTransfers(transfers);
         });
         
-        const qPendingBatches = query(collection(db, 'production_batches'), where('status', '==', 'pending_approval'));
-        const unsubBatches = onSnapshot(qPendingBatches, (snapshot) => {
-            setPendingBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate().toISOString() } as ProductionBatch)));
-            setIsLoadingBatches(false);
-        });
-
         return () => {
             unsubTransfers();
-            unsubBatches();
         };
     }
   }, []);
@@ -730,6 +723,11 @@ export default function StockControlPage() {
         toast({ variant: 'destructive', title: 'Error', description: result.error });
     }
     setIsSubmitting(false);
+  };
+  
+  const handleViewBatchDetails = async (batchId: string) => {
+    const batch = await getProductionBatch(batchId);
+    setViewingBatch(batch);
   };
 
   const paginatedPending = useMemo(() => {
@@ -875,7 +873,7 @@ export default function StockControlPage() {
                                             <TableCell className="text-right">
                                                 {t.is_sales_run && t.status === 'active' && (
                                                     <Button variant="outline" size="sm" asChild>
-                                                        <Link href={`/dashboard/sales-runs?runId=${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
+                                                        <Link href={`/dashboard/deliveries`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
                                                     </Button>
                                                 )}
                                             </TableCell>
@@ -906,22 +904,25 @@ export default function StockControlPage() {
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
       </div>
-      <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' || userRole === 'Accountant' ? "log" : "initiate-transfer"}>
+      <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' || userRole === 'Accountant' ? 'log' : 'initiate-transfer'}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
                 <TabsTrigger value="log" className="relative">
                     <History className="mr-2 h-4 w-4"/> Log
-                    {userRole !== 'Manager' && userRole !== 'Developer' && userRole !== 'Accountant' && allPendingTransfers.length > 0 && (
+                </TabsTrigger>
+                {(userRole === 'Storekeeper' || userRole === 'Developer') && 
+                    <TabsTrigger value="initiate-transfer">
+                        <Send className="mr-2 h-4 w-4" /> Initiate Transfer
+                    </TabsTrigger>
+                }
+                 <TabsTrigger value="all-pending" className="relative">
+                    <Hourglass className="mr-2 h-4 w-4" /> All Pending
+                    {allPendingTransfers.length > 0 && (
                         <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0">
                             {allPendingTransfers.length}
                         </Badge>
                     )}
                 </TabsTrigger>
-                {isStorekeeper &&
-                    <TabsTrigger value="initiate-transfer">
-                        <Send className="mr-2 h-4 w-4" /> Initiate Transfer
-                    </TabsTrigger>
-                }
             </TabsList>
         </div>
         <TabsContent value="initiate-transfer">
@@ -1091,7 +1092,7 @@ export default function StockControlPage() {
                                     ) : productionTransfers.length > 0 ? (
                                         productionTransfers.map(t => (
                                             <TableRow key={t.id}>
-                                                <TableCell>{format(new Date(t.date), 'Pp')}</TableCell>
+                                                <TableCell>{t.date ? format(new Date(t.date), 'Pp') : 'N/A'}</TableCell>
                                                 <TableCell>{t.from_staff_name}</TableCell>
                                                 <TableCell>{t.items[0]?.productName}</TableCell>
                                                 <TableCell>{t.items[0]?.quantity}</TableCell>
@@ -1110,18 +1111,18 @@ export default function StockControlPage() {
                         </TabsContent>
                         <TabsContent value="batches" className="mt-4">
                              <Table>
-                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Recipe</TableHead><TableHead>Requested By</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {allProductionBatches.map(batch => (
                                          <TableRow key={batch.id}>
-                                            <TableCell>{format(new Date(batch.createdAt), 'PPP')}</TableCell>
+                                            <TableCell>{batch.createdAt ? format(new Date(batch.createdAt), 'PPP') : 'N/A'}</TableCell>
                                             <TableCell>{batch.recipeName}</TableCell>
                                             <TableCell>{batch.requestedByName}</TableCell>
                                             <TableCell><Badge variant={batch.status === 'pending_approval' ? 'secondary' : batch.status === 'completed' ? 'default' : 'destructive'}>{batch.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                            <TableCell>
+                                            <TableCell className="text-right">
                                                 {batch.status === 'pending_approval' ?
                                                     <ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchPageData} />
-                                                    : <Button size="sm" variant="ghost">View Details</Button>
+                                                    : <Button variant="ghost" size="icon" onClick={() => handleViewBatchDetails(batch.id)}><Eye className="h-4 w-4" /></Button>
                                                 }
                                             </TableCell>
                                         </TableRow>
@@ -1133,10 +1134,56 @@ export default function StockControlPage() {
                 </CardContent>
             </Card>
           </TabsContent>
+           <TabsContent value="all-pending">
+              <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>All Pending Transfers</CardTitle>
+                            <CardDescription>A log of all transfers awaiting acknowledgement across the system.</CardDescription>
+                        </div>
+                        <DateRangeFilter date={allPendingDate} setDate={setAllPendingDate} />
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>From</TableHead>
+                                <TableHead>To</TableHead>
+                                <TableHead>Items</TableHead>
+                                <TableHead>Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
+                            ) : (
+                                paginatedAllPending.map((transfer) => (
+                                    <TableRow key={transfer.id}>
+                                        <TableCell>{transfer.date ? format(new Date(transfer.date), 'PPpp') : 'N/A'}</TableCell>
+                                        <TableCell>{transfer.from_staff_name}</TableCell>
+                                        <TableCell>{transfer.to_staff_name}</TableCell>
+                                        <TableCell>{transfer.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
+                                        <TableCell><Badge variant="secondary">{transfer.status}</Badge></TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                             { !isLoading && paginatedAllPending.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-24 text-center">No pending transfers found.</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+                <CardFooter>
+                  <PaginationControls visibleRows={visibleAllPendingRows} setVisibleRows={setVisibleAllPendingRows} totalRows={allPendingTransfers.length} />
+                </CardFooter>
+              </Card>
+          </TabsContent>
       </Tabs>
     </div>
   );
 }
-
-
-    
