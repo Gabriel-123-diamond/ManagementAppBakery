@@ -1474,7 +1474,7 @@ export type PaymentConfirmation = {
 };
 
 
-export async function getPaymentConfirmations(): Promise<Omit<PaymentConfirmation, 'date' | 'approvedAt'> & { date: string | null; approvedAt: string | null; }>[] {
+export async function getPaymentConfirmations(): Promise<(Omit<PaymentConfirmation, 'date' | 'approvedAt'> & { date: string | null; approvedAt: string | null; })[]> {
     try {
       const q = query(
         collection(db, 'payment_confirmations'),
@@ -3374,3 +3374,6 @@ export async function returnUnusedIngredients(
       
 
 
+
+
+    

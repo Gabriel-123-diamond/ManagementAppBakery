@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -87,6 +88,7 @@ type Recipe = {
   description: string;
   ingredients: RecipeIngredient[];
   applicableProductIds?: string[];
+  authorizedBakers?: string[];
   isGeneralRecipe?: boolean;
 };
 
@@ -584,12 +586,13 @@ function StartProductionDialog({ recipes, onStart, isSubmitting, user }: { recip
     )
 }
 
-function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, children }: { onSave: (data: Omit<Recipe, 'id'>, id?: string) => void, allIngredients: Ingredient[], allProducts: Product[], recipe?: Recipe | null, user: User, children: React.ReactNode }) {
+function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, children, allBakers }: { onSave: (data: Omit<Recipe, 'id'>, id?: string) => void, allIngredients: Ingredient[], allProducts: Product[], recipe?: Recipe | null, user: User, children: React.ReactNode, allBakers: {id: string, name: string}[] }) {
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
     const [applicableProducts, setApplicableProducts] = useState<{ value: string, label: string }[]>([]);
+    const [authorizedBakers, setAuthorizedBakers] = useState<{ value: string, label: string }[]>([]);
     const [isGeneral, setIsGeneral] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
@@ -604,16 +607,21 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
                     const product = allProducts.find(p => p.id === id);
                     return { value: id, label: product?.name || 'Unknown Product' };
                 }) || []);
+                 setAuthorizedBakers(recipe.authorizedBakers?.map(id => {
+                    const baker = allBakers.find(b => b.id === id);
+                    return { value: id, label: baker?.name || 'Unknown Baker' };
+                }) || []);
                 setIsGeneral(recipe.isGeneralRecipe || false);
             } else {
                 setName('');
                 setDescription('');
                 setIngredients([{ ingredientId: '', ingredientName: '', quantity: 0, unit: '' }]);
                 setApplicableProducts([]);
+                setAuthorizedBakers([]);
                 setIsGeneral(false);
             }
         }
-    }, [isOpen, recipe, allProducts]);
+    }, [isOpen, recipe, allProducts, allBakers]);
     
     const handleIngredientChange = (index: number, field: keyof RecipeIngredient, value: string) => {
         const newIngredients = [...ingredients];
@@ -645,14 +653,15 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
             return;
         }
         setIsSubmitting(true);
-        const recipeData = {
+        const recipeData: Omit<Recipe, 'id' | 'status'> = {
             name,
             description,
             ingredients,
             applicableProductIds: applicableProducts.map(p => p.value),
+            authorizedBakers: authorizedBakers.map(b => b.value),
             isGeneralRecipe: isGeneral,
         };
-        const result = await handleSaveRecipe(recipeData, recipe?.id, user);
+        const result = await handleSaveRecipe(recipeData as any, recipe?.id, user);
         if (result.success) {
             toast({ title: 'Success', description: 'Recipe saved successfully.' });
             setIsOpen(false);
@@ -663,6 +672,7 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
     };
     
     const productOptions = useMemo(() => allProducts.map(p => ({ value: p.id, label: p.name })), [allProducts]);
+    const bakerOptions = useMemo(() => allBakers.map(b => ({ value: b.id, label: b.name })), [allBakers]);
     
     const customSelectStyles: any = {
         control: (styles: any) => ({ ...styles, backgroundColor: 'hsl(var(--input))', borderColor: 'hsl(var(--border))' }),
@@ -695,6 +705,18 @@ function RecipeDialog({ onSave, allIngredients, allProducts, recipe, user, child
                     <div className="space-y-2">
                         <Label htmlFor="recipe-desc">Description</Label>
                         <Textarea id="recipe-desc" value={description} onChange={e => setDescription(e.target.value)} />
+                    </div>
+
+                     <div className="space-y-2">
+                        <Label>Restrict to Bakers</Label>
+                        <SelectLib
+                            isMulti
+                            options={bakerOptions}
+                            value={authorizedBakers}
+                            onChange={(selected) => setAuthorizedBakers(selected as any)}
+                            styles={customSelectStyles}
+                            placeholder="Select bakers... (leave empty for all)"
+                        />
                     </div>
 
                     <div className="space-y-2">
@@ -756,6 +778,7 @@ export default function RecipesPage() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+    const [allBakers, setAllBakers] = useState<{id: string, name: string}[]>([]);
     
     const [productionBatches, setProductionBatches] = useState<{ pending: ProductionBatch[], in_production: ProductionBatch[], completed: ProductionBatch[], other: ProductionBatch[] }>({ pending: [], in_production: [], completed: [], other: [] });
     const [productionLogs, setProductionLogs] = useState<ProductionLog[]>([]);
@@ -780,15 +803,17 @@ export default function RecipesPage() {
 
     const fetchStaticData = useCallback(async () => {
         try {
-            const [productData, ingredientData, recipeData] = await Promise.all([
+            const [productData, ingredientData, recipeData, staffData] = await Promise.all([
                 getProducts(),
                 getIngredients(),
-                getRecipes()
+                getRecipes(),
+                getStaffList()
             ]);
 
             setProducts(productData);
             setIngredients(ingredientData);
             setRecipes(recipeData);
+            setAllBakers(staffData.filter(s => s.role === 'Baker' || s.role === 'Chief Baker').map(s => ({id: s.id, name: s.name})));
 
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -857,7 +882,6 @@ export default function RecipesPage() {
         setIsSubmitting(true);
 
         const result = await startProductionBatch({
-            recipe,
             recipeId: recipe.id,
             recipeName: recipe.name,
             batchSize
@@ -947,6 +971,14 @@ export default function RecipesPage() {
     const { filtered: filteredInProduction, paginated: paginatedInProduction } = filterAndPaginateBatches(productionBatches.in_production, inProductionDate, visibleInProductionRows);
     const { filtered: filteredCompleted, paginated: paginatedCompleted } = filterAndPaginateBatches(productionBatches.completed, completedDate, visibleCompletedRows);
     const { filtered: filteredOther, paginated: paginatedOther } = filterAndPaginateBatches(productionBatches.other, otherDate, visibleOtherRows);
+    
+    const availableRecipesForBaker = useMemo(() => {
+        if (!user || user.role === 'Manager' || user.role === 'Developer') return recipes;
+        if (user.role === 'Baker' || user.role === 'Chief Baker') {
+            return recipes.filter(r => !r.authorizedBakers || r.authorizedBakers.length === 0 || r.authorizedBakers.includes(user.staff_id));
+        }
+        return [];
+    }, [recipes, user]);
 
     if (!user) {
          return <div className="flex justify-center items-center h-full"><Loader2 className="h-16 w-16 animate-spin" /></div>;
@@ -1020,7 +1052,7 @@ export default function RecipesPage() {
                                 <CardTitle>Recipe Book</CardTitle>
                                 <CardDescription>Manage all production recipes for the bakery.</CardDescription>
                             </div>
-                            <RecipeDialog onSave={handleSaveRecipeAction} allIngredients={ingredients} allProducts={products} user={user}>
+                            <RecipeDialog onSave={handleSaveRecipeAction} allIngredients={ingredients} allProducts={products} user={user} allBakers={allBakers}>
                                 <Button disabled={!canEditRecipe}>
                                     <PlusCircle className="mr-2 h-4 w-4" /> Create New Recipe
                                 </Button>
@@ -1055,7 +1087,7 @@ export default function RecipesPage() {
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>
-                                                <RecipeDialog onSave={handleSaveRecipeAction} allIngredients={ingredients} allProducts={products} recipe={recipe} user={user}>
+                                                <RecipeDialog onSave={handleSaveRecipeAction} allIngredients={ingredients} allProducts={products} recipe={recipe} user={user} allBakers={allBakers}>
                                                     <Button variant="outline" size="sm" disabled={!canEditRecipe}><Edit className="mr-2 h-4 w-4" /> Edit</Button>
                                                 </RecipeDialog>
                                             </CardFooter>
@@ -1075,7 +1107,7 @@ export default function RecipesPage() {
                             </div>
                              {canStartProduction && (
                                 <StartProductionDialog 
-                                    recipes={recipes} 
+                                    recipes={availableRecipesForBaker} 
                                     onStart={handleStartProduction}
                                     isSubmitting={isSubmitting}
                                     user={user}
@@ -1199,3 +1231,6 @@ export default function RecipesPage() {
     );
 }
 
+
+
+    
