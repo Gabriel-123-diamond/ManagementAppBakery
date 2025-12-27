@@ -149,6 +149,88 @@ function TransferDetailsDialog({ transfer, isOpen, onOpenChange }: { transfer: T
     );
 }
 
+function BatchDetailsDialog({ batch, isOpen, onOpenChange }: { batch: ProductionBatch | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!batch) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Batch Details: {batch.id.substring(0, 6)}...</DialogTitle>
+                    <DialogDescription>
+                        Details for production batch requested by {batch.requestedByName} on {batch.createdAt ? format(new Date(batch.createdAt), 'PPP') : 'N/A'}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                    <div className="text-sm space-y-1">
+                        <p><strong>Recipe:</strong> {batch.recipeName}</p>
+                        <p><strong>Status:</strong> <Badge variant={batch.status === 'pending_approval' ? 'secondary' : batch.status === 'completed' ? 'default' : 'destructive'}>{batch.status.replace(/_/g, ' ')}</Badge></p>
+                    </div>
+                    
+                    {batch.ingredients?.length > 0 && (
+                        <>
+                            <Separator className="my-2" />
+                            <h4 className="font-semibold">Ingredients Used</h4>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Ingredient</TableHead>
+                                        <TableHead className="text-right">Quantity Used</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {batch.ingredients.map(ing => (
+                                        <TableRow key={ing.ingredientId}>
+                                            <TableCell>{ing.ingredientName}</TableCell>
+                                            <TableCell className="text-right">{ing.quantity} {ing.unit}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </>
+                    )}
+
+                    {(batch.status === 'completed' || batch.status === 'return_completed') && (
+                        <>
+                            {batch.producedItems && batch.producedItems.length > 0 && (
+                                <>
+                                    <Separator className="my-2" />
+                                    <h4 className="font-semibold">Items Produced</h4>
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {batch.producedItems.map((item, index) => (
+                                                <TableRow key={`prod-${index}`}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </>
+                            )}
+                            {batch.wastedItems && batch.wastedItems.length > 0 && (
+                                <>
+                                    <Separator className="my-2" />
+                                    <h4 className="font-semibold">Items Wasted</h4>
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {batch.wastedItems.map((item, index) => (
+                                                <TableRow key={`waste-${index}`}><TableCell>{item.productName}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </>
+                            )}
+                        </>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function PaginationControls({
     visibleRows,
     setVisibleRows,
@@ -777,6 +859,7 @@ export default function StockControlPage() {
 
   const userRole = user?.role;
   const canInitiateTransfer = userRole === 'Manager' || userRole === 'Supervisor' || userRole === 'Storekeeper' || userRole === 'Developer';
+  const isStorekeeper = userRole === 'Storekeeper';
   
   if (!user) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -897,10 +980,10 @@ export default function StockControlPage() {
   }
 
   // Full view for admins
-  const isStorekeeper = userRole === 'Storekeeper';
   return (
     <div className="flex flex-col gap-4">
        <TransferDetailsDialog transfer={viewingTransfer} isOpen={!!viewingTransfer} onOpenChange={() => setViewingTransfer(null)} />
+       <BatchDetailsDialog batch={viewingBatch} isOpen={!!viewingBatch} onOpenChange={() => setViewingBatch(null)} />
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
       </div>
@@ -910,12 +993,12 @@ export default function StockControlPage() {
                 <TabsTrigger value="log" className="relative">
                     <History className="mr-2 h-4 w-4"/> Log
                 </TabsTrigger>
-                {(userRole === 'Storekeeper' || userRole === 'Developer') && 
+                {!isStorekeeper && 
                     <TabsTrigger value="initiate-transfer">
                         <Send className="mr-2 h-4 w-4" /> Initiate Transfer
                     </TabsTrigger>
                 }
-                 <TabsTrigger value="all-pending" className="relative">
+                <TabsTrigger value="all-pending" className="relative">
                     <Hourglass className="mr-2 h-4 w-4" /> All Pending
                     {allPendingTransfers.length > 0 && (
                         <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0">
@@ -1122,7 +1205,7 @@ export default function StockControlPage() {
                                             <TableCell className="text-right">
                                                 {batch.status === 'pending_approval' ?
                                                     <ApproveBatchDialog batch={batch} user={user} allIngredients={ingredients} onApproval={fetchPageData} />
-                                                    : <Button variant="ghost" size="icon" onClick={() => handleViewBatchDetails(batch.id)}><Eye className="h-4 w-4" /></Button>
+                                                    : <Button variant="ghost" size="icon" onClick={() => setViewingBatch(batch)}><Eye className="h-4 w-4" /></Button>
                                                 }
                                             </TableCell>
                                         </TableRow>
@@ -1154,11 +1237,12 @@ export default function StockControlPage() {
                                 <TableHead>To</TableHead>
                                 <TableHead>Items</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {isLoading ? (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="h-8 w-8 animate-spin" /></TableCell></TableRow>
                             ) : (
                                 paginatedAllPending.map((transfer) => (
                                     <TableRow key={transfer.id}>
@@ -1167,12 +1251,15 @@ export default function StockControlPage() {
                                         <TableCell>{transfer.to_staff_name}</TableCell>
                                         <TableCell>{transfer.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
                                         <TableCell><Badge variant="secondary">{transfer.status}</Badge></TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => setViewingTransfer(transfer)}><Eye className="h-4 w-4" /></Button>
+                                        </TableCell>
                                     </TableRow>
                                 ))
                             )}
                              { !isLoading && paginatedAllPending.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">No pending transfers found.</TableCell>
+                                    <TableCell colSpan={6} className="h-24 text-center">No pending transfers found.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
@@ -1187,3 +1274,4 @@ export default function StockControlPage() {
     </div>
   );
 }
+
