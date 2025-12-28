@@ -85,7 +85,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         }
 
         if (!auth.user) {
-            if (pathname.startsWith('/dashboard')) {
+            if (pathname.startsWith('/dashboard') || pathname.startsWith('/database-tools')) {
                 router.push('/');
             }
             return;
