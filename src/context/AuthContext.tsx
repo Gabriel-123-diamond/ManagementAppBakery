@@ -80,9 +80,32 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     const pathname = usePathname();
 
     useEffect(() => {
-        if (!auth.isLoading && !auth.user && pathname.startsWith('/dashboard')) {
-            router.push('/');
+        if (auth.isLoading) {
+            return; // Wait until user authentication status is resolved
         }
+
+        if (!auth.user) {
+            if (pathname.startsWith('/dashboard')) {
+                router.push('/');
+            }
+            return;
+        }
+
+        // Define role-based route restrictions
+        const routeRestrictions: { [path: string]: string[] } = {
+            '/dashboard/pos': ['Showroom Staff', 'Developer'],
+            '/dashboard/staff': ['Manager', 'Supervisor', 'Developer'],
+            '/dashboard/customers': ['Manager', 'Supervisor', 'Developer'],
+            '/dashboard/accounting': ['Manager', 'Supervisor', 'Accountant', 'Developer'],
+        };
+        
+        for (const path in routeRestrictions) {
+            if (pathname.startsWith(path) && !routeRestrictions[path].includes(auth.user.role)) {
+                router.push('/dashboard'); // Redirect to a safe default page
+                return;
+            }
+        }
+
     }, [auth.isLoading, auth.user, router, pathname]);
 
     if (auth.isLoading || (!auth.user && pathname.startsWith('/dashboard'))) {
