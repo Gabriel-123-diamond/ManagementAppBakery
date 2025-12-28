@@ -1652,7 +1652,7 @@ function SalesRunDetailsPageClientContent() {
     
     const runComplete = runStatus === 'completed' || run.status === 'return_completed';
     const isPendingReturn = runStatus === 'pending_return';
-    const canPerformActions = user?.staff_id === run?.to_staff_id;
+    const canPerformActions = user.staff_id === run.to_staff_id;
     const canPerformSales = canPerformActions && !runComplete && !isPendingReturn;
     const canReturnStock = canPerformActions && (run.status === 'active' || isPendingReturn);
     const allDebtsPaid = run.totalOutstanding <= 0;
@@ -1909,7 +1909,7 @@ function SalesRunDetailsPageClientContent() {
                                                     </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         {outstanding > 0 ? (
-                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales}/>
+                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales} />
                                                         ) : (
                                                             <Button size="sm" variant="outline" disabled>Record Payment</Button>
                                                         )}
