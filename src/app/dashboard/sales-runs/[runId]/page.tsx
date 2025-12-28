@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
@@ -418,7 +417,7 @@ function SplitPaymentDialog({
   )
 }
 
-function LogExpenseDialog({ run, user }: { run: SalesRun, user: User | null }) {
+function LogExpenseDialog({ run, user, disabled }: { run: SalesRun, user: User | null, disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -458,7 +457,7 @@ function LogExpenseDialog({ run, user }: { run: SalesRun, user: User | null }) {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="w-full" disabled={run.status !== 'active'}>
+                <Button variant="outline" className="w-full" disabled={disabled}>
                     <Fuel className="mr-2 h-5 w-5"/>
                     <span>Log Expense</span>
                 </Button>
@@ -501,7 +500,7 @@ function LogExpenseDialog({ run, user }: { run: SalesRun, user: User | null }) {
     )
 }
 
-function ReportWasteDialog({ run, user, onWasteReported, remainingItems }: { run: SalesRun, user: User | null, onWasteReported: () => void, remainingItems: OrderItem[] }) {
+function ReportWasteDialog({ run, user, onWasteReported, remainingItems, disabled }: { run: SalesRun, user: User | null, onWasteReported: () => void, remainingItems: OrderItem[], disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -562,7 +561,7 @@ function ReportWasteDialog({ run, user, onWasteReported, remainingItems }: { run
     return (
          <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="w-full" disabled={run.status !== 'active'}>
+                <Button variant="outline" className="w-full" disabled={disabled}>
                     <Trash className="mr-2 h-5 w-5"/>
                     <span>Report Waste</span>
                 </Button>
@@ -601,7 +600,7 @@ function ReportWasteDialog({ run, user, onWasteReported, remainingItems }: { run
     )
 }
 
-function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: SalesRun, user: User | null, onSaleMade: (order: CompletedOrder) => void, remainingItems: OrderItem[] }) {
+function SellToCustomerDialog({ run, user, onSaleMade, remainingItems, disabled }: { run: SalesRun, user: User | null, onSaleMade: () => void, remainingItems: OrderItem[], disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -704,6 +703,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
         if (result.success && result.orderId) {
             toast({ title: 'Success', description: 'Sale has been submitted for approval.' });
             setIsOpen(false);
+            onSaleMade();
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
         }
@@ -713,7 +713,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                 <Button className="w-full" disabled={run.status !== 'active'}>
+                 <Button className="w-full" disabled={disabled}>
                     <PlusCircle className="mr-2 h-5 w-5"/>
                     <span>Standard Sale</span>
                 </Button>
@@ -820,7 +820,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems }: { run: 
     )
 }
 
-function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: SalesRun, user: User | null, onSaleMade: (order: CompletedOrder) => void, remainingItems: OrderItem[] }) {
+function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems, disabled }: { run: SalesRun, user: User | null, onSaleMade: () => void, remainingItems: OrderItem[], disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -953,6 +953,7 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
         if (result.success && result.orderId) {
             toast({ title: 'Success', description: 'Custom sale submitted for approval.' });
             setIsOpen(false);
+            onSaleMade();
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
         }
@@ -962,7 +963,7 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="secondary" className="w-full" disabled={run.status !== 'active'}>
+                <Button variant="secondary" className="w-full" disabled={disabled}>
                     <FileSignature className="mr-2 h-5 w-5"/>
                     <span>Log Custom Sale</span>
                 </Button>
@@ -1063,7 +1064,7 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems }: { run: S
     )
 }
 
-function RecordPaymentDialog({ customer, run, user }: { customer: RunCustomer | null, run: SalesRun, user: User | null }) {
+function RecordPaymentDialog({ customer, run, user, disabled }: { customer: RunCustomer | null, run: SalesRun, user: User | null, disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [amount, setAmount] = useState<number | string>('');
@@ -1152,7 +1153,7 @@ function RecordPaymentDialog({ customer, run, user }: { customer: RunCustomer | 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                 <Button variant="outline" className="w-full" disabled={run.status !== 'active'}>
+                 <Button variant="outline" className="w-full" disabled={disabled}>
                     <HandCoins className="mr-2 h-5 w-5"/>
                     <span>Record Debt Payment</span>
                 </Button>
@@ -1212,7 +1213,7 @@ function RecordPaymentDialog({ customer, run, user }: { customer: RunCustomer | 
     )
 }
 
-function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: SalesRun, user: User | null, onReturn: () => void, remainingItems: OrderItem[] }) {
+function ReturnStockDialog({ run, user, onReturn, remainingItems, disabled }: { run: SalesRun, user: User | null, onReturn: () => void, remainingItems: OrderItem[], disabled?: boolean }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [itemsToReturn, setItemsToReturn] = useState<Record<string, number | string>>({});
@@ -1296,7 +1297,7 @@ function ReturnStockDialog({ run, user, onReturn, remainingItems }: { run: Sales
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="secondary" className="w-full">
+                <Button variant="secondary" className="w-full" disabled={disabled}>
                     <Undo2 className="mr-2 h-4 w-4" /> Return Unsold Stock
                 </Button>
             </DialogTrigger>
@@ -1651,10 +1652,9 @@ function SalesRunDetailsPageClientContent() {
     
     const runComplete = runStatus === 'completed' || run.status === 'return_completed';
     const isPendingReturn = runStatus === 'pending_return';
-    const canPerformActions = user?.staff_id === run?.to_staff_id;
+    const canPerformActions = (user?.staff_id === run?.to_staff_id);
     const canPerformSales = canPerformActions && !runComplete && !isPendingReturn;
     const canReturnStock = canPerformActions && (run.status === 'active' || isPendingReturn);
-    const isReadOnly = user?.role === 'Manager';
     const allDebtsPaid = run.totalOutstanding <= 0;
     
     return (
@@ -1766,12 +1766,12 @@ function SalesRunDetailsPageClientContent() {
                         <CardDescription>Manage this sales run.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-grow grid grid-cols-2 gap-2">
-                        <SellToCustomerDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems}/>
-                        <RecordPaymentDialog customer={null} run={run} user={user} />
-                        <LogCustomSaleDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} />
-                        <LogExpenseDialog run={run} user={user} />
-                        <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} />
-                        {canReturnStock && <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} />}
+                        <SellToCustomerDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales} />
+                        <RecordPaymentDialog customer={null} run={run} user={user} disabled={!canPerformSales} />
+                        <LogCustomSaleDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales} />
+                        <LogExpenseDialog run={run} user={user} disabled={!canPerformSales} />
+                        <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales} />
+                        <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} disabled={!canReturnStock} />
                     </CardContent>
                     {canPerformActions && (
                         <CardFooter className="flex-col gap-2">
@@ -1870,9 +1870,9 @@ function SalesRunDetailsPageClientContent() {
                                                 <div className="flex justify-between"><span>Paid:</span><span className="text-green-500">{formatCurrency(customer.totalPaid)}</span></div>
                                                 <div className="flex justify-between font-bold"><span>Owed:</span><span className="text-destructive">{formatCurrency(outstanding)}</span></div>
                                             </div>
-                                             {canPerformActions && !runComplete && outstanding > 0 && (
+                                             {outstanding > 0 && (
                                                 <div className="pt-2 border-t">
-                                                    <RecordPaymentDialog customer={customer} run={run} user={user} />
+                                                    <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformActions || runComplete} />
                                                 </div>
                                             )}
                                         </Card>
@@ -1908,8 +1908,8 @@ function SalesRunDetailsPageClientContent() {
                                                         {outstanding > 0 ? formatCurrency(outstanding) : '-'}
                                                     </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                                        {(canPerformActions && !runComplete && outstanding > 0) ? (
-                                                            <RecordPaymentDialog customer={customer} run={run} user={user} />
+                                                        {outstanding > 0 ? (
+                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformActions || runComplete} />
                                                         ) : (
                                                             <Button size="sm" variant="outline" disabled>Record Payment</Button>
                                                         )}
