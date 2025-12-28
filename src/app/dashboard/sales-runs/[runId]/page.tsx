@@ -1064,7 +1064,7 @@ function LogCustomSaleDialog({ run, user, onSaleMade, remainingItems, disabled }
     )
 }
 
-function RecordPaymentDialog({ customer, run, user, disabled }: { customer: RunCustomer | null, run: SalesRun, user: User | null, disabled?: boolean }) {
+function RecordPaymentDialog({ customer, run, user, disabled, onPaymentRecorded }: { customer: RunCustomer | null, run: SalesRun, user: User | null, disabled?: boolean, onPaymentRecorded: () => void }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [amount, setAmount] = useState<number | string>('');
@@ -1142,6 +1142,7 @@ function RecordPaymentDialog({ customer, run, user, disabled }: { customer: RunC
         if (result.success) {
             toast({ title: 'Success', description: 'Debt payment recorded for approval.' });
             setAmount('');
+            onPaymentRecorded();
             setIsOpen(false);
         } else {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
@@ -1652,10 +1653,11 @@ function SalesRunDetailsPageClientContent() {
     
     const isRunComplete = run.status === 'completed' || run.status === 'return_completed';
     const isPendingReturn = run.status === 'pending_return';
-    const canPerformActions = (user.staff_id === run.to_staff_id || user.role === 'Developer');
-    const isAssignedStaff = user.staff_id === run.to_staff_id;
-    const canPerformSales = isAssignedStaff && !isRunComplete && !isPendingReturn;
+    const canPerformSales = (user.staff_id === run.to_staff_id) && !isRunComplete && !isPendingReturn;
+    const canReturnStock = (user.staff_id === run.to_staff_id) && (run.status === 'active' || isPendingReturn);
     const allDebtsPaid = run.totalOutstanding <= 0;
+    
+    const showActionsCard = (user.role === 'Developer') || (user.staff_id === run.to_staff_id && !['Manager', 'Accountant', 'Supervisor'].includes(user.role));
     
     return (
         <div className="flex flex-col gap-6">
@@ -1731,7 +1733,7 @@ function SalesRunDetailsPageClientContent() {
              </div>
 
             <h1 className="text-2xl font-bold font-headline">Sales Run: {runId.substring(0,8)}...</h1>
-             {runComplete && <Badge variant="outline">Completed</Badge>}
+             {isRunComplete && <Badge variant="outline">Completed</Badge>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <Card>
@@ -1760,7 +1762,7 @@ function SalesRunDetailsPageClientContent() {
                     </CardContent>
                 </Card>
 
-                { (isAssignedStaff || user.role === 'Developer') && 
+                { showActionsCard && 
                     <Card className="flex flex-col">
                         <CardHeader>
                             <CardTitle>Actions</CardTitle>
@@ -1768,13 +1770,13 @@ function SalesRunDetailsPageClientContent() {
                         </CardHeader>
                         <CardContent className="flex-grow grid grid-cols-2 gap-2">
                             <SellToCustomerDialog run={run} user={user} onSaleMade={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales}/>
-                            <RecordPaymentDialog customer={null} run={run} user={user} disabled={!canPerformSales}/>
+                            <RecordPaymentDialog customer={null} run={run} user={user} onPaymentRecorded={fetchRunData} disabled={!canPerformSales}/>
                             <LogCustomSaleDialog run={run} user={user} onSaleMade={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales} />
                             <LogExpenseDialog run={run} user={user} disabled={!canPerformSales} />
                             <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales} />
-                            <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales && !isPendingReturn}/>
+                            {canReturnStock && <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} />}
                         </CardContent>
-                         <CardFooter className="flex-col gap-2">
+                        <CardFooter className="flex-col gap-2">
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button disabled={isRunComplete || !allDebtsPaid || remainingItems.length > 0} className="w-full">
@@ -1872,7 +1874,7 @@ function SalesRunDetailsPageClientContent() {
                                             </div>
                                              {canPerformActions && !runComplete && outstanding > 0 && (
                                                 <div className="pt-2 border-t">
-                                                    <RecordPaymentDialog customer={customer} run={run} user={user} disabled={isRunComplete}/>
+                                                    <RecordPaymentDialog customer={customer} run={run} user={user} onPaymentRecorded={fetchRunData} disabled={runComplete}/>
                                                 </div>
                                             )}
                                         </Card>
@@ -1909,7 +1911,7 @@ function SalesRunDetailsPageClientContent() {
                                                     </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         {outstanding > 0 ? (
-                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales} />
+                                                            <RecordPaymentDialog customer={customer} run={run} user={user} onPaymentRecorded={fetchRunData} disabled={!canPerformSales}/>
                                                         ) : (
                                                             <Button size="sm" variant="outline" disabled>Record Payment</Button>
                                                         )}
