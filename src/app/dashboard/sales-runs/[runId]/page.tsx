@@ -795,7 +795,7 @@ function SellToCustomerDialog({ run, user, onSaleMade, remainingItems, disabled 
                                 <ShadSelectContent>
                                     <ShadSelectItem value="Cash"><Wallet className="mr-2 h-4 w-4"/> Cash</ShadSelectItem>
                                     <ShadSelectItem value="POS"><SquareTerminal className="mr-2 h-4 w-4"/> POS</ShadSelectItem>
-                                    <ShadSelectItem value="Credit" disabled={customerType==='walk-in'}><CreditCard className="mr-2 h-4 w-4"/> Credit</ShadSelectItem>
+                                    <ShadSelectItem value="Credit" disabled={customerType === 'walk-in'}><CreditCard className="mr-2 h-4 w-4"/> Credit</ShadSelectItem>
                                 </ShadSelectContent>
                             </ShadSelect>
                         </div>
@@ -1872,7 +1872,7 @@ function SalesRunDetailsPageClientContent() {
                                             </div>
                                              {outstanding > 0 && (
                                                 <div className="pt-2 border-t">
-                                                    <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformActions || runComplete} />
+                                                    <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales} />
                                                 </div>
                                             )}
                                         </Card>
@@ -1909,7 +1909,7 @@ function SalesRunDetailsPageClientContent() {
                                                     </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         {outstanding > 0 ? (
-                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformActions || runComplete} />
+                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales} />
                                                         ) : (
                                                             <Button size="sm" variant="outline" disabled>Record Payment</Button>
                                                         )}
