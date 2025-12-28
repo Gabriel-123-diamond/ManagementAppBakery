@@ -1650,18 +1650,9 @@ function SalesRunDetailsPageClientContent() {
         );
     }
     
-    const runComplete = runStatus === 'completed' || run.status === 'return_completed';
-    const isPendingReturn = runStatus === 'pending_return';
-    const isAssignedDriver = user?.staff_id === run?.to_staff_id;
-    const isDeveloper = user?.role === 'Developer';
-    
-    const canPerformActions = (isAssignedDriver || isDeveloper) && !runComplete && !isPendingReturn;
-    const canReturnStock = (isAssignedDriver || isDeveloper) && (run.status === 'active' || isPendingReturn);
-    const canCompleteRun = (isAssignedDriver || isDeveloper) && !runComplete;
+    const isRunComplete = run.status === 'completed' || run.status === 'return_completed';
+    const canPerformActions = user.staff_id === run.to_staff_id && !isRunComplete;
 
-    const allDebtsPaid = run.totalOutstanding <= 0;
-    
-    const canPerformSales = canPerformActions;
     
     return (
         <div className="flex flex-col gap-6">
@@ -1737,7 +1728,7 @@ function SalesRunDetailsPageClientContent() {
              </div>
 
             <h1 className="text-2xl font-bold font-headline">Sales Run: {runId.substring(0,8)}...</h1>
-             {runComplete && <Badge variant="outline">Completed</Badge>}
+             {isRunComplete && <Badge variant="outline">Completed</Badge>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <Card>
@@ -1766,35 +1757,33 @@ function SalesRunDetailsPageClientContent() {
                     </CardContent>
                 </Card>
 
-                {(isAssignedDriver || isDeveloper) && (
+                {(user.role === 'Developer' || run.to_staff_id === user.staff_id) && (
                     <Card className="flex flex-col">
                         <CardHeader>
                             <CardTitle>Actions</CardTitle>
                             <CardDescription>Manage this sales run.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow grid grid-cols-2 gap-2">
-                            <SellToCustomerDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales}/>
+                            <SellToCustomerDialog run={run} user={user} onSaleMade={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales} />
                             <RecordPaymentDialog customer={null} run={run} user={user} disabled={!canPerformSales} />
-                            <LogCustomSaleDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales} />
+                            <LogCustomSaleDialog run={run} user={user} onSaleMade={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales} />
                             <LogExpenseDialog run={run} user={user} disabled={!canPerformSales} />
                             <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales} />
-                            <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} disabled={!canReturnStock} />
+                            <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales && !isPendingReturn}/>
                         </CardContent>
-                        {canCompleteRun && (
-                            <CardFooter className="flex-col gap-2">
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button disabled={!allDebtsPaid || remainingItems.length > 0} className="w-full">
-                                            <CheckCircle className="mr-2 h-4 w-4"/> Complete Run
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will complete the sales run. All stock and finances will be reconciled. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader
-                                        ><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleCompleteRunAction}>Yes, Complete Run</AlertDialogAction></AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </CardFooter>
-                         )}
+                        <CardFooter className="flex-col gap-2">
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button disabled={isRunComplete || !run.totalOutstanding || run.totalOutstanding > 0 || remainingItems.length > 0} className="w-full">
+                                        <CheckCircle className="mr-2 h-4 w-4"/> Complete Run
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will complete the sales run. All stock and finances will be reconciled. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader
+                                    ><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleCompleteRunAction}>Yes, Complete Run</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </CardFooter>
                     </Card>
                 )}
             </div>
@@ -1814,7 +1803,7 @@ function SalesRunDetailsPageClientContent() {
                                 <TableHead className="text-right">Pending Sale</TableHead>
                                 <TableHead className="text-right">Returned (Pending)</TableHead>
                                 <TableHead className="text-right">Net Remaining</TableHead>
-                                {isDeveloper && <TableHead className="text-right">Actions</TableHead>}
+                                {user.role === 'Developer' && <TableHead className="text-right">Actions</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1832,7 +1821,7 @@ function SalesRunDetailsPageClientContent() {
                                         <TableCell className="text-right text-yellow-500">{pendingSaleQty}</TableCell>
                                         <TableCell className="text-right text-orange-500">{pendingReturnQty}</TableCell>
                                         <TableCell className="text-right font-bold">{netRemaining}</TableCell>
-                                        {isDeveloper && (
+                                        {user.role === 'Developer' && (
                                             <TableCell className="text-right">
                                                 <Button variant="ghost" size="icon" onClick={() => setEditingProduct(fullProduct!)}>
                                                     <Edit className="h-4 w-4" />
@@ -1878,9 +1867,9 @@ function SalesRunDetailsPageClientContent() {
                                                 <div className="flex justify-between"><span>Paid:</span><span className="text-green-500">{formatCurrency(customer.totalPaid)}</span></div>
                                                 <div className="flex justify-between font-bold"><span>Owed:</span><span className="text-destructive">{formatCurrency(outstanding)}</span></div>
                                             </div>
-                                             {canPerformActions && !runComplete && outstanding > 0 && (
+                                             {canPerformActions && !isRunComplete && outstanding > 0 && (
                                                 <div className="pt-2 border-t">
-                                                    <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformActions}/>
+                                                    <RecordPaymentDialog customer={customer} run={run} user={user} />
                                                 </div>
                                             )}
                                         </Card>
@@ -1916,8 +1905,8 @@ function SalesRunDetailsPageClientContent() {
                                                         {outstanding > 0 ? formatCurrency(outstanding) : '-'}
                                                     </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                                        {canPerformActions && !runComplete && outstanding > 0 ? (
-                                                            <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformActions}/>
+                                                        {canPerformActions && !isRunComplete && outstanding > 0 ? (
+                                                            <RecordPaymentDialog customer={customer} run={run} user={user} />
                                                         ) : (
                                                             <Button size="sm" variant="outline" disabled>Record Payment</Button>
                                                         )}
@@ -2069,5 +2058,3 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
-
-    
