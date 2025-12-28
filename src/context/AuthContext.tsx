@@ -91,20 +91,45 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
             return;
         }
 
-        // Define role-based route restrictions
+        // --- Comprehensive Role-Based Route Restrictions ---
         const routeRestrictions: { [path: string]: string[] } = {
             '/dashboard/pos': ['Showroom Staff', 'Developer'],
-            '/dashboard/staff': ['Manager', 'Supervisor', 'Developer'],
+            '/dashboard/orders': ['Manager', 'Supervisor', 'Showroom Staff', 'Accountant', 'Developer'],
+            '/dashboard/inventory/products': ['Manager', 'Supervisor', 'Storekeeper', 'Accountant', 'Developer'],
+            '/dashboard/inventory/recipes': ['Manager', 'Supervisor', 'Baker', 'Chief Baker', 'Storekeeper', 'Developer'],
+            '/dashboard/inventory/ingredients': ['Manager', 'Supervisor', 'Storekeeper', 'Accountant', 'Developer'],
+            '/dashboard/inventory/suppliers': ['Manager', 'Supervisor', 'Storekeeper', 'Accountant', 'Developer'],
+            '/dashboard/inventory/other-supplies': ['Manager', 'Supervisor', 'Storekeeper', 'Accountant', 'Developer'],
+            '/dashboard/inventory/waste-logs': ['Manager', 'Developer', 'Storekeeper', 'Delivery Staff', 'Showroom Staff', 'Accountant'],
             '/dashboard/customers': ['Manager', 'Supervisor', 'Developer'],
+            '/dashboard/staff': ['Manager', 'Supervisor', 'Developer'],
+            '/dashboard/deliveries': ['Delivery Staff', 'Developer', 'Manager', 'Supervisor', 'Accountant'],
             '/dashboard/accounting': ['Manager', 'Supervisor', 'Accountant', 'Developer'],
+            '/dashboard/promotions': ['Manager', 'Supervisor', 'Developer'],
+            '/database-tools': ['Developer'],
         };
         
         for (const path in routeRestrictions) {
             if (pathname.startsWith(path) && !routeRestrictions[path].includes(auth.user.role)) {
+                console.log(`Redirecting: User with role '${auth.user.role}' tried to access '${pathname}'.`);
                 router.push('/dashboard'); // Redirect to a safe default page
                 return;
             }
         }
+        
+        // Special case for stock control as it has complex visibility
+        if (pathname.startsWith('/dashboard/inventory/stock-control')) {
+            const allowedRoles = ['Manager', 'Supervisor', 'Storekeeper', 'Delivery Staff', 'Showroom Staff', 'Developer'];
+            if (!allowedRoles.includes(auth.user.role)) {
+                router.push('/dashboard');
+                return;
+            }
+            if (auth.user.role === 'Baker') { // Explicitly block Baker
+                router.push('/dashboard');
+                return;
+            }
+        }
+
 
     }, [auth.isLoading, auth.user, router, pathname]);
 
