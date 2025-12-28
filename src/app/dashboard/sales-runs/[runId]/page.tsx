@@ -1870,7 +1870,7 @@ function SalesRunDetailsPageClientContent() {
                                                 <div className="flex justify-between"><span>Paid:</span><span className="text-green-500">{formatCurrency(customer.totalPaid)}</span></div>
                                                 <div className="flex justify-between font-bold"><span>Owed:</span><span className="text-destructive">{formatCurrency(outstanding)}</span></div>
                                             </div>
-                                             {outstanding > 0 && (
+                                             {canPerformActions && !runComplete && outstanding > 0 && (
                                                 <div className="pt-2 border-t">
                                                     <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales} />
                                                 </div>
@@ -1908,7 +1908,7 @@ function SalesRunDetailsPageClientContent() {
                                                         {outstanding > 0 ? formatCurrency(outstanding) : '-'}
                                                     </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                                        {outstanding > 0 ? (
+                                                        {(canPerformActions && !runComplete && outstanding > 0) ? (
                                                             <RecordPaymentDialog customer={customer} run={run} user={user} disabled={!canPerformSales} />
                                                         ) : (
                                                             <Button size="sm" variant="outline" disabled>Record Payment</Button>
@@ -2061,3 +2061,5 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
+
+    
