@@ -267,7 +267,7 @@ function ManagerView({ allRuns, isLoading, user }: { allRuns: SalesRunType[], is
                             </TableHeader>
                             <TableBody>
                                 {filteredAndSortedRuns.map(run => (
-                                    <TableRow key={run.id} className="cursor-pointer hover:bg-muted" onClick={() => router.push(`/dashboard/sales-runs?runId=${run.id}`)}>
+                                    <TableRow key={run.id}>
                                         <TableCell>{run.to_staff_name}</TableCell>
                                         <TableCell>{format(new Date(run.date), 'PPP')}</TableCell>
                                         <TableCell><Badge variant={run.status === 'active' ? 'default' : 'secondary'}>{run.status}</Badge></TableCell>
