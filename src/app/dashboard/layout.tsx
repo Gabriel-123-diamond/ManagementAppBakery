@@ -419,7 +419,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           { href: "/dashboard/staff/payroll", label: "Payroll", disabled: false },
         ]
       },
-      { href: "/dashboard/deliveries", icon: Car, label: "Deliveries", notificationKey: "activeRuns", roles: ['Delivery Staff', 'Developer'], disabled: false },
+      { href: "/dashboard/deliveries", icon: Car, label: "Deliveries", notificationKey: "activeRuns", roles: ['Delivery Staff', 'Developer', 'Manager', 'Supervisor', 'Accountant'] },
       { href: "/dashboard/accounting", icon: Wallet, label: "Accounting", notificationKey: "accounting", roles: ['Manager', 'Supervisor', 'Accountant', 'Developer'] },
       { href: "/dashboard/promotions", icon: LineChart, label: "Promotions", roles: ['Manager', 'Supervisor', 'Developer'], disabled: true },
       { href: "/dashboard/communication", icon: MessageSquare, label: "Communication", notificationKey: "communication", roles: ['Manager', 'Supervisor', 'Accountant', 'Showroom Staff', 'Delivery Staff', 'Baker', 'Storekeeper', 'Developer'] },
