@@ -47,6 +47,10 @@ type WageRecord = {
     netPay: number;
 }
 
+type User = {
+    role: string;
+}
+
 function PaginationControls({
     visibleRows,
     setVisibleRows,
@@ -87,7 +91,7 @@ function PaginationControls({
     )
 }
 
-function PayrollTab() {
+function PayrollTab({ user }: { user: User | null }) {
     const { toast } = useToast();
     const [staffList, setStaffList] = useState<StaffMember[]>([]);
     const [payrollData, setPayrollData] = useState<Record<string, PayrollEntry>>({});
@@ -96,6 +100,9 @@ function PayrollTab() {
     const [payrollPeriod, setPayrollPeriod] = useState<Date>(new Date());
     const [tempValues, setTempValues] = useState<Record<string, { additions?: string, deductions?: string }>>({});
     const [isPayrollProcessed, setIsPayrollProcessed] = useState(false);
+
+    const isReadOnly = useMemo(() => user?.role === 'Supervisor', [user]);
+
 
     const initializePayroll = useCallback(async (staff: StaffMember[], period: Date) => {
         const periodString = format(period, 'MMMM yyyy');
@@ -324,9 +331,9 @@ function PayrollTab() {
                                                     value={tempValues[entry.staffId]?.additions || ''}
                                                     onChange={(e) => handleTempChange(entry.staffId, 'additions', e.target.value)}
                                                     placeholder={entry.additions.toLocaleString()}
-                                                    disabled={isPayrollProcessed}
+                                                    disabled={isPayrollProcessed || isReadOnly}
                                                 />
-                                                <Button size="icon" variant="ghost" onClick={() => applyChange(entry.staffId, 'additions')} disabled={isPayrollProcessed}><Check className="h-4 w-4"/></Button>
+                                                <Button size="icon" variant="ghost" onClick={() => applyChange(entry.staffId, 'additions')} disabled={isPayrollProcessed || isReadOnly}><Check className="h-4 w-4"/></Button>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right">{grossPay.toLocaleString()}</TableCell>
@@ -338,9 +345,9 @@ function PayrollTab() {
                                                     value={tempValues[entry.staffId]?.deductions || ''}
                                                     onChange={(e) => handleTempChange(entry.staffId, 'deductions', e.target.value)}
                                                     placeholder={totalDeductions.toLocaleString()}
-                                                    disabled={isPayrollProcessed}
+                                                    disabled={isPayrollProcessed || isReadOnly}
                                                 />
-                                                <Button size="icon" variant="ghost" onClick={() => applyChange(entry.staffId, 'totalDeductions')} disabled={isPayrollProcessed}><Check className="h-4 w-4"/></Button>
+                                                <Button size="icon" variant="ghost" onClick={() => applyChange(entry.staffId, 'totalDeductions')} disabled={isPayrollProcessed || isReadOnly}><Check className="h-4 w-4"/></Button>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right font-bold">{netPay.toLocaleString()}</TableCell>
@@ -364,7 +371,7 @@ function PayrollTab() {
             <CardFooter>
                  <AlertDialog>
                     <AlertDialogTrigger asChild>
-                         <Button disabled={isProcessing || isLoading || staffList.length === 0 || isPayrollProcessed}>
+                         <Button disabled={isProcessing || isLoading || staffList.length === 0 || isPayrollProcessed || isReadOnly}>
                             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {isPayrollProcessed ? 'Payroll Processed' : `Process Payroll for ${format(payrollPeriod, 'MMMM yyyy')}`}
                         </Button>
@@ -387,7 +394,7 @@ function PayrollTab() {
     );
 }
 
-function AdvanceSalaryTab() {
+function AdvanceSalaryTab({ user }: { user: User | null }) {
     const { toast } = useToast();
     const [staffList, setStaffList] = useState<StaffMember[]>([]);
     const [selectedStaffId, setSelectedStaffId] = useState('');
@@ -396,6 +403,8 @@ function AdvanceSalaryTab() {
     const [isLoading, setIsLoading] = useState(true);
     const [advancePeriod, setAdvancePeriod] = useState(new Date());
     const [isPayrollForPeriodProcessed, setIsPayrollForPeriodProcessed] = useState(false);
+    const isReadOnly = useMemo(() => user?.role === 'Supervisor', [user]);
+
 
     const selectedStaffMember = useMemo(() => staffList.find(s => s.id === selectedStaffId), [staffList, selectedStaffId]);
     const netPay = useMemo(() => selectedStaffMember?.pay_rate || 0, [selectedStaffMember]);
@@ -500,7 +509,7 @@ function AdvanceSalaryTab() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="staff-select">Select Staff Member</Label>
-                        <Select value={selectedStaffId} onValueChange={setSelectedStaffId} disabled={isPayrollForPeriodProcessed}>
+                        <Select value={selectedStaffId} onValueChange={setSelectedStaffId} disabled={isPayrollForPeriodProcessed || isReadOnly}>
                             <SelectTrigger id="staff-select">
                                 <SelectValue placeholder="Select a staff member..." />
                             </SelectTrigger>
@@ -527,12 +536,12 @@ function AdvanceSalaryTab() {
                             value={amount}
                             onChange={handleAmountChange}
                             placeholder="e.g., 10000"
-                            disabled={!selectedStaffId || isPayrollForPeriodProcessed}
+                            disabled={!selectedStaffId || isPayrollForPeriodProcessed || isReadOnly}
                         />
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" disabled={isSubmitting || isPayrollForPeriodProcessed}>
+                    <Button type="submit" disabled={isSubmitting || isPayrollForPeriodProcessed || isReadOnly}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                         Record Advance
                     </Button>
@@ -642,6 +651,15 @@ function AdvanceSalaryLogTab() {
 }
 
 export default function PayrollPageContainer() {
+    const [user, setUser] = useState<User | null>(null);
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('loggedInUser');
+        if(storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+    }, [])
+
     return (
         <div className="flex flex-col gap-4">
             <h1 className="text-2xl font-bold font-headline">Payroll</h1>
@@ -652,10 +670,10 @@ export default function PayrollPageContainer() {
                     <TabsTrigger value="advance-log">Advance Salary Log</TabsTrigger>
                 </TabsList>
                 <TabsContent value="payroll" className="mt-4">
-                    <PayrollTab />
+                    <PayrollTab user={user} />
                 </TabsContent>
                 <TabsContent value="advance" className="mt-4">
-                    <AdvanceSalaryTab />
+                    <AdvanceSalaryTab user={user} />
                 </TabsContent>
                 <TabsContent value="advance-log" className="mt-4">
                     <AdvanceSalaryLogTab />
@@ -664,3 +682,5 @@ export default function PayrollPageContainer() {
         </div>
     )
 }
+
+    

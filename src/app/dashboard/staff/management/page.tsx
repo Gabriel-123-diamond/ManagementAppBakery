@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -77,6 +76,10 @@ type Staff = {
   mfa_enabled?: boolean;
   mfa_secret?: string;
 };
+
+type User = {
+  role: string;
+}
 
 const getStatusVariant = (status: boolean) => {
   return status ? "default" : "secondary";
@@ -316,11 +319,21 @@ export default function StaffManagementPage() {
     const { toast } = useToast();
     const [staffList, setStaffList] = useState<Staff[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [user, setUser] = useState<User | null>(null);
     const [editingStaff, setEditingStaff] = useState<Partial<Staff> | null>(null);
     const [viewingStaff, setViewingStaff] = useState<Staff | null>(null);
     const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
     const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
     const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('loggedInUser');
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+    }, []);
+
+    const isReadOnly = useMemo(() => user?.role === 'Supervisor', [user]);
 
     const availableRoles = useMemo(() => {
         const roles = new Set(staffList.map(s => s.role));
@@ -405,7 +418,7 @@ export default function StaffManagementPage() {
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold font-headline">Staff</h1>
-                <Button onClick={openAddDialog}>
+                <Button onClick={openAddDialog} disabled={isReadOnly}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Staff
                 </Button>
             </div>
@@ -460,11 +473,11 @@ export default function StaffManagementPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onSelect={() => openEditDialog(staff)}>Edit</DropdownMenuItem>
+                                                <DropdownMenuItem onSelect={() => openEditDialog(staff)} disabled={isReadOnly}>Edit</DropdownMenuItem>
                                                 <DropdownMenuItem onSelect={() => openDetailDialog(staff)}>View Details</DropdownMenuItem>
                                                 <DropdownMenuItem disabled>Pay Staff</DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-destructive" onSelect={() => setStaffToDelete(staff)}>Delete</DropdownMenuItem>
+                                                <DropdownMenuItem className="text-destructive" onSelect={() => setStaffToDelete(staff)} disabled={isReadOnly}>Delete</DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </div>
@@ -526,11 +539,11 @@ export default function StaffManagementPage() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem onSelect={() => openEditDialog(staff)}>Edit</DropdownMenuItem>
+                                                        <DropdownMenuItem onSelect={() => openEditDialog(staff)} disabled={isReadOnly}>Edit</DropdownMenuItem>
                                                         <DropdownMenuItem onSelect={() => openDetailDialog(staff)}>View Details</DropdownMenuItem>
                                                         <DropdownMenuItem disabled>Pay Staff</DropdownMenuItem>
                                                         <DropdownMenuSeparator />
-                                                        <DropdownMenuItem className="text-destructive" onSelect={() => setStaffToDelete(staff)}>Delete</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive" onSelect={() => setStaffToDelete(staff)} disabled={isReadOnly}>Delete</DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -566,3 +579,5 @@ export default function StaffManagementPage() {
         </div>
     );
 }
+
+    

@@ -387,7 +387,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const navLinks: NavLink[] = useMemo(() => {
     const allLinks: NavLink[] = [
       { href: "/dashboard", icon: Home, label: "Dashboard", roles: ['Manager', 'Supervisor', 'Accountant', 'Showroom Staff', 'Delivery Staff', 'Baker', 'Storekeeper', 'Developer'] },
-      { href: "/dashboard/pos", icon: ShoppingBag, label: "POS", roles: ['Supervisor', 'Showroom Staff', 'Developer'] },
+      { href: "/dashboard/pos", icon: ShoppingBag, label: "POS", roles: ['Manager', 'Showroom Staff', 'Developer'] },
       {
         icon: Inbox, label: "Orders", roles: ['Manager', 'Supervisor', 'Showroom Staff', 'Accountant', 'Developer'], sublinks: [
           { href: "/dashboard/orders/regular", label: "Regular Orders" },
@@ -420,7 +420,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         ]
       },
       { href: "/dashboard/deliveries", icon: Car, label: "Deliveries", notificationKey: "activeRuns", roles: ['Manager', 'Supervisor', 'Accountant', 'Delivery Staff', 'Developer'], disabled: false },
-      { href: "/dashboard/accounting", icon: Wallet, label: "Accounting", notificationKey: "accounting", roles: ['Manager', 'Accountant', 'Developer'] },
+      { href: "/dashboard/accounting", icon: Wallet, label: "Accounting", notificationKey: "accounting", roles: ['Manager', 'Supervisor', 'Accountant', 'Developer'] },
       { href: "/dashboard/promotions", icon: LineChart, label: "Promotions", roles: ['Manager', 'Supervisor', 'Developer'], disabled: true },
       { href: "/dashboard/communication", icon: MessageSquare, label: "Communication", notificationKey: "communication", roles: ['Manager', 'Supervisor', 'Accountant', 'Showroom Staff', 'Delivery Staff', 'Baker', 'Storekeeper', 'Developer'] },
       { href: "/dashboard/documentation", icon: BookOpen, label: "Documentation", roles: ['Manager', 'Supervisor', 'Accountant', 'Showroom Staff', 'Delivery Staff', 'Baker', 'Storekeeper', 'Developer'] },
@@ -579,3 +579,5 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </ProtectedRoute>
     )
 }
+
+    
