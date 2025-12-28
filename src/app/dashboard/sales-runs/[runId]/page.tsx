@@ -1652,7 +1652,8 @@ function SalesRunDetailsPageClientContent() {
     
     const runComplete = runStatus === 'completed' || run.status === 'return_completed';
     const isPendingReturn = runStatus === 'pending_return';
-    const canPerformActions = user.staff_id === run.to_staff_id;
+    const isReadOnly = user?.role === 'Supervisor' || user?.role === 'Manager' || user?.role === 'Accountant' || user?.role === 'Developer';
+    const canPerformActions = (user?.staff_id === run?.to_staff_id) && !isReadOnly;
     const canPerformSales = canPerformActions && !runComplete && !isPendingReturn;
     const canReturnStock = canPerformActions && (run.status === 'active' || isPendingReturn);
     const allDebtsPaid = run.totalOutstanding <= 0;
@@ -1760,35 +1761,37 @@ function SalesRunDetailsPageClientContent() {
                     </CardContent>
                 </Card>
 
-                 <Card className="flex flex-col">
-                    <CardHeader>
-                        <CardTitle>Actions</CardTitle>
-                        <CardDescription>Manage this sales run.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-grow grid grid-cols-2 gap-2">
-                        <SellToCustomerDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales}/>
-                        <RecordPaymentDialog customer={null} run={run} user={user} disabled={!canPerformSales}/>
-                        <LogCustomSaleDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales}/>
-                        <LogExpenseDialog run={run} user={user} disabled={!canPerformSales}/>
-                        <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales}/>
-                        <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} disabled={!canReturnStock} />
-                    </CardContent>
-                    {canPerformActions && (
-                        <CardFooter className="flex-col gap-2">
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button disabled={runComplete || !allDebtsPaid || remainingItems.length > 0} className="w-full">
-                                        <CheckCircle className="mr-2 h-4 w-4"/> Complete Run
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                     <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will complete the sales run. All stock and finances will be reconciled. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader
-                                    ><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleCompleteRunAction}>Yes, Complete Run</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </CardFooter>
-                     )}
-                </Card>
+                {canPerformActions && (
+                    <Card className="flex flex-col">
+                        <CardHeader>
+                            <CardTitle>Actions</CardTitle>
+                            <CardDescription>Manage this sales run.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-grow grid grid-cols-2 gap-2">
+                            <SellToCustomerDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales}/>
+                            <RecordPaymentDialog customer={null} run={run} user={user} disabled={!canPerformSales}/>
+                            <LogCustomSaleDialog run={run} user={user} onSaleMade={() => {}} remainingItems={remainingItems} disabled={!canPerformSales}/>
+                            <LogExpenseDialog run={run} user={user} disabled={!canPerformSales}/>
+                            <ReportWasteDialog run={run} user={user} onWasteReported={fetchRunData} remainingItems={remainingItems} disabled={!canPerformSales}/>
+                            <ReturnStockDialog run={run} user={user} onReturn={fetchRunData} remainingItems={remainingItems} disabled={!canReturnStock} />
+                        </CardContent>
+                        {canPerformActions && (
+                            <CardFooter className="flex-col gap-2">
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button disabled={runComplete || !allDebtsPaid || remainingItems.length > 0} className="w-full">
+                                            <CheckCircle className="mr-2 h-4 w-4"/> Complete Run
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will complete the sales run. All stock and finances will be reconciled. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader
+                                        ><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleCompleteRunAction}>Yes, Complete Run</AlertDialogAction></AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </CardFooter>
+                        )}
+                    </Card>
+                )}
             </div>
             
             <Card>
@@ -2061,5 +2064,3 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
-
-    
