@@ -2404,6 +2404,7 @@ export default function AccountingPage() {
     const indirectCategories = costCategories.filter(c => c.type === 'indirect');
     
     const isReadOnly = user?.role === 'Manager' || user?.role === 'Supervisor';
+    const canSeeApprovals = user?.role === 'Accountant' || user?.role === 'Developer';
 
 
   if (!user) {
@@ -2423,10 +2424,10 @@ export default function AccountingPage() {
                 <TabsTrigger value="sales">Sales</TabsTrigger>
                 <TabsTrigger value="debt-payments">Debt &amp; Payments</TabsTrigger>
                 <TabsTrigger value="assets-wages">Assets &amp; Wages</TabsTrigger>
-                 <TabsTrigger value="approvals" className="relative">
+                 {canSeeApprovals && <TabsTrigger value="approvals" className="relative">
                     Approvals
                     {(notificationCounts.approvals + notificationCounts.payments) > 0 && <Badge variant="destructive" className="ml-2">{notificationCounts.approvals + notificationCounts.payments}</Badge>}
-                </TabsTrigger>
+                </TabsTrigger>}
             </TabsList>
         </div>
 
@@ -2474,7 +2475,7 @@ export default function AccountingPage() {
                 <TabsContent value="wages"><WagesTab /></TabsContent>
             </Tabs>
         </TabsContent>
-        <TabsContent value="approvals">
+        {canSeeApprovals && <TabsContent value="approvals">
             <Tabs defaultValue="stock-requests" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="stock-requests" className="relative">
@@ -2493,7 +2494,7 @@ export default function AccountingPage() {
                     <PaymentsRequestsTab user={user} notificationBadge={null} isReadOnly={isReadOnly}/>
                 </TabsContent>
             </Tabs>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
     </div>
   );
