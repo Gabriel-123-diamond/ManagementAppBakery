@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
-import { SpeedInsights } from "@vercel/speed-insights/next"
+
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
@@ -26,7 +26,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <Toaster />
-          <SpeedInsights />
+
         </AuthProvider>
       </body>
     </html>

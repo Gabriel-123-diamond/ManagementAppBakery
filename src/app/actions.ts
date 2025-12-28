@@ -3,7 +3,6 @@
 "use server";
 
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, addDoc, updateDoc, Timestamp, serverTimestamp, writeBatch, increment, deleteDoc, runTransaction, setDoc } from "firebase/firestore";
-import { startOfMonth, endOfMonth, startOfWeek, endOfDay, endOfYear, eachDayOfInterval, format, subDays, endOfHour, startOfHour, startOfYear as dateFnsStartOfYear, endOfYear as dateFnsEndOfYear } from "date-fns";
 import { db } from "@/lib/firebase";
 import { randomUUID } from 'crypto';
 import speakeasy from 'speakeasy';
@@ -291,6 +290,7 @@ type AttendanceStatusResult = {
 } | null;
 
 export async function getAttendanceStatus(staffId: string): Promise<AttendanceStatusResult> {
+    const { startOfDay } = await import('date-fns');
     const today = startOfDay(new Date());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -485,6 +485,7 @@ export type BakerDashboardStats = {
 };
 
 export async function getBakerDashboardStats(bakerId: string): Promise<BakerDashboardStats> {
+    const { startOfWeek, endOfDay, eachDayOfInterval, format } = await import('date-fns');
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
     const weeklyProductionData = eachDayOfInterval({ start: weekStart, end: endOfDay(now) }).map(day => ({
@@ -536,6 +537,7 @@ export type ShowroomDashboardStats = {
 };
 
 export async function getShowroomDashboardStats(staffId: string): Promise<ShowroomDashboardStats> {
+    const { startOfDay, endOfDay } = await import('date-fns');
     const now = new Date();
     const start = startOfDay(now);
     const end = endOfDay(now);
@@ -723,6 +725,7 @@ export async function getAllSalesRuns(): Promise<SalesRunResult> {
 }
 
 export async function getSalesStats(filter: 'daily' | 'weekly' | 'monthly' | 'yearly'): Promise<{ totalSales: number }> {
+    const { startOfDay, subDays } = await import('date-fns');
     const now = new Date();
     let fromDate: Date;
 
@@ -1029,6 +1032,7 @@ export type ProfitAndLossStatement = {
 };
 
 export async function getProfitAndLossStatement(dateRange?: { from: Date, to: Date }): Promise<ProfitAndLossStatement> {
+    const { subDays } = await import('date-fns');
     try {
         const dateFilters = dateRange 
             ? [where("date", ">=", Timestamp.fromDate(dateRange.from)), where("date", "<=", Timestamp.fromDate(dateRange.to))]
@@ -1521,6 +1525,7 @@ export async function handlePaymentConfirmation(confirmationId: string, action: 
                 }
                 
                 if (!confirmationData.isExpense && !confirmationData.isDebtPayment) {
+                    const { format, startOfDay } = await import('date-fns');
                     const salesDocId = format(confirmationDate, 'yyyy-MM-dd');
                     const salesDocRef = doc(db, 'sales', salesDocId);
                     const salesDoc = await transaction.get(salesDocRef);
