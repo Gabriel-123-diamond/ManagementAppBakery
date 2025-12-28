@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
@@ -1650,10 +1651,10 @@ function SalesRunDetailsPageClientContent() {
     
     const runComplete = runStatus === 'completed' || run.status === 'return_completed';
     const isPendingReturn = runStatus === 'pending_return';
-    const canPerformActions = user?.staff_id === run?.to_staff_id;
+    const isReadOnly = user?.role === 'Manager' || user?.role === 'Supervisor';
+    const canPerformActions = (user?.staff_id === run?.to_staff_id) && !isReadOnly;
     const canPerformSales = canPerformActions && !runComplete && !isPendingReturn;
     const canReturnStock = canPerformActions && (run.status === 'active' || isPendingReturn);
-    const isReadOnly = user?.role === 'Manager';
     const allDebtsPaid = run.totalOutstanding <= 0;
     
     return (
@@ -2060,3 +2061,4 @@ export default function SalesRunPage() {
         </Suspense>
     )
 }
+

@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -364,19 +365,22 @@ function LogPaymentDialog({ creditor, onPaymentLogged, disabled }: { creditor: C
     const [isLoading, setIsLoading] = useState(false);
     const [amount, setAmount] = useState<number | string>('');
 
+    const outstandingBalance = creditor.balance;
+
     const handleSubmit = async () => {
-        if (!amount || Number(amount) <= 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a valid amount.'});
+        const numAmount = Number(amount);
+        if (!numAmount || numAmount <= 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a valid positive amount.'});
             return;
         }
-        if (Number(amount) > creditor.balance) {
-             toast({ variant: 'destructive', title: 'Error', description: `Payment cannot be greater than the outstanding balance of ${formatCurrency(creditor.balance)}.`});
+        if (numAmount > outstandingBalance) {
+             toast({ variant: 'destructive', title: 'Error', description: `Payment cannot be greater than the outstanding balance of ${formatCurrency(outstandingBalance)}.`});
             return;
         }
         setIsLoading(true);
-        const result = await handleLogPayment(creditor.id, Number(amount));
+        const result = await handleLogPayment(creditor.id, numAmount);
         if (result.success) {
-            toast({ title: 'Success', description: `Payment of ${formatCurrency(Number(amount))} logged.`});
+            toast({ title: 'Success', description: `Payment of ${formatCurrency(numAmount)} logged.`});
             onPaymentLogged();
             setIsOpen(false);
             setAmount('');
@@ -395,12 +399,12 @@ function LogPaymentDialog({ creditor, onPaymentLogged, disabled }: { creditor: C
                 <DialogHeader>
                     <DialogTitle>Log Payment to {creditor.name}</DialogTitle>
                     <DialogDescription>
-                        Outstanding Balance: <span className="font-bold text-destructive">{formatCurrency(creditor.balance)}</span>
+                        Outstanding Balance: <span className="font-bold text-destructive">{formatCurrency(outstandingBalance)}</span>
                     </DialogDescription>
                 </DialogHeader>
                  <div className="py-4">
                     <Label htmlFor="payment-amount">Amount Paid (₦)</Label>
-                    <Input id="payment-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <Input id="payment-amount" type="number" value={amount} min="0" max={outstandingBalance} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <AlertDialog>
@@ -934,7 +938,7 @@ function DirectCostsTab({ categories, isReadOnly }: { categories: CostCategory[]
                                 <div className="flex md:hidden items-center text-muted-foreground self-start mt-2">
                                     <CornerDownRight className="h-4 w-4 mr-2"/>
                                 </div>
-                                <p className="w-full md:w-auto text-left md:text-right font-bold text-lg">{formatCurrency(c.total)}</p>
+                                <p className={cn("w-full md:w-auto text-left md:text-right font-bold text-lg", c.total < 0 ? "text-destructive" : "text-green-500")}>{formatCurrency(c.total)}</p>
                             </Card>
                         ))}
                     </CardContent>
@@ -2399,7 +2403,7 @@ export default function AccountingPage() {
     const directCategories = costCategories.filter(c => c.type === 'direct');
     const indirectCategories = costCategories.filter(c => c.type === 'indirect');
     
-    const isReadOnly = user?.role === 'Manager';
+    const isReadOnly = user?.role === 'Manager' || user?.role === 'Supervisor';
 
 
   if (!user) {
@@ -2494,3 +2498,4 @@ export default function AccountingPage() {
     </div>
   );
 }
+

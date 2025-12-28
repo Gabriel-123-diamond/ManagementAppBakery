@@ -1392,19 +1392,22 @@ export async function getExpenses(dateRange: { from: string, to: string }): Prom
 export async function handleLogPayment(supplierId: string, amount: number): Promise<{ success: boolean; error?: string }> {
     try {
         const batch = writeBatch(db);
-
-        // 1. Update supplier's amountPaid
         const supplierRef = doc(db, "suppliers", supplierId);
+        
+        // 1. Update supplier's amountPaid
         batch.update(supplierRef, { amountPaid: increment(amount) });
 
-        // 2. Add a corresponding expense record
-        const expenseRef = doc(collection(db, "indirectCosts"));
+        // 2. Add a positive entry to directCosts to offset the debt
         const supplierDoc = await getDoc(supplierRef);
-        const supplierName = supplierDoc.exists() ? supplierDoc.data()!.name : 'Unknown Supplier';
-        batch.set(expenseRef, {
-            category: "Creditor Payments",
+        if (!supplierDoc.exists()) throw new Error("Supplier not found.");
+        const supplierName = supplierDoc.data()!.name;
+        
+        const directCostRef = doc(collection(db, 'directCosts'));
+        batch.set(directCostRef, {
             description: `Payment to supplier: ${supplierName}`,
-            amount: amount,
+            category: 'Creditor Payments',
+            quantity: 1, // Represents a single payment transaction
+            total: amount, // Positive amount
             date: serverTimestamp()
         });
         
@@ -3073,13 +3076,13 @@ export async function approveStockIncrease(requestId: string, costPerUnit: numbe
         const supplierRef = doc(db, 'suppliers', requestData.supplierId);
         batch.update(supplierRef, { amountOwed: increment(totalCost) });
 
-        // 4. Add to Direct Costs
+        // 4. Add a NEGATIVE entry to Direct Costs to represent the liability
         const directCostRef = doc(collection(db, 'directCosts'));
         batch.set(directCostRef, {
             description: `Purchase of ${requestData.ingredientName} from ${requestData.supplierName}`,
             category: 'Ingredients',
             quantity: requestData.quantity,
-            total: totalCost,
+            total: -totalCost, // Store as a negative value
             date: approvedDate
         });
         

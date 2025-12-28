@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -54,7 +55,7 @@ import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addDirectCost, handleLogPayment, initializePaystackTransaction } from "@/app/actions";
+import { handleLogPayment } from "@/app/actions";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -227,13 +228,15 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
     const [isLoading, setIsLoading] = useState(false);
     const [amount, setAmount] = useState<number | string>('');
 
+    const outstandingBalance = supplier.amountOwed - supplier.amountPaid;
+
     const handleSubmit = async () => {
         if (!amount || Number(amount) <= 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a valid amount.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a valid positive amount.'});
             return;
         }
-        if (Number(amount) > (supplier.amountOwed - supplier.amountPaid)) {
-             toast({ variant: 'destructive', title: 'Error', description: `Payment cannot be greater than the outstanding balance of ${formatCurrency(supplier.amountOwed - supplier.amountPaid)}.`});
+        if (Number(amount) > outstandingBalance) {
+             toast({ variant: 'destructive', title: 'Error', description: `Payment cannot be greater than the outstanding balance of ${formatCurrency(outstandingBalance)}.`});
             return;
         }
         setIsLoading(true);
@@ -260,12 +263,12 @@ function LogPaymentDialog({ supplier, onPaymentLogged, disabled }: { supplier: S
                 <DialogHeader>
                     <DialogTitle>Log Payment to {supplier.name}</DialogTitle>
                     <DialogDescription>
-                        Outstanding Balance: <span className="font-bold text-destructive">{formatCurrency(supplier.amountOwed - supplier.amountPaid)}</span>
+                        Outstanding Balance: <span className="font-bold text-destructive">{formatCurrency(outstandingBalance)}</span>
                     </DialogDescription>
                 </DialogHeader>
                  <div className="py-4">
                     <Label htmlFor="payment-amount">Amount Paid (₦)</Label>
-                    <Input id="payment-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <Input id="payment-amount" type="number" value={amount} min="0" max={outstandingBalance} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <AlertDialog>
@@ -299,8 +302,8 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
     const [searchTerm, setSearchTerm] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
     
+    const isReadOnly = user?.role === 'Manager' || user?.role === 'Supervisor';
     const canLogPayments = user?.role === 'Accountant' || user?.role === 'Developer';
-    const isReadOnly = user?.role === 'Manager';
 
     const fetchDetails = useCallback(async () => {
         if (!user) return;
@@ -310,12 +313,12 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
         const supplyLogsSnapshot = await getDocs(supplyLogsQuery);
         const supplyLogs = supplyLogsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupplyLog));
         
-        const paymentsQuery = query(collection(db, 'indirectCosts'), where('category', '==', 'Creditor Payments'), where('description', '==', `Payment to supplier: ${supplier.name}`));
+        const paymentsQuery = query(collection(db, 'directCosts'), where('category', '==', 'Creditor Payments'), where('description', '==', `Payment to supplier: ${supplier.name}`));
         const paymentLogsSnapshot = await getDocs(paymentsQuery);
         const paymentLogs = paymentLogsSnapshot.docs.map(doc => ({
             id: doc.id,
             supplierId: supplier.id,
-            amount: doc.data().amount,
+            amount: doc.data().total,
             date: doc.data().date,
             description: doc.data().description,
         } as PaymentLog));
@@ -552,9 +555,9 @@ export default function SuppliersPage() {
         }));
     }, [suppliers]);
     
+    const isReadOnly = user?.role === 'Manager' || user?.role === 'Supervisor';
     const canManageSuppliers = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper' || user?.role === 'Accountant';
     const isStorekeeper = user?.role === 'Storekeeper';
-    const isReadOnly = user?.role === 'Manager';
 
 
     if (selectedSupplier) {
@@ -675,3 +678,4 @@ export default function SuppliersPage() {
         </div>
     );
 }
+
