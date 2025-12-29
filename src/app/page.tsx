@@ -37,8 +37,7 @@ export default function LoginPage() {
   useEffect(() => {
     // Force default theme on login page
     const root = document.documentElement;
-    const themes = ['theme-midnight', 'theme-forest', 'theme-rose-gold', 'theme-classic-light', 'theme-slate', 'theme-crimson', 'theme-emerald', 'theme-abyss', 'theme-sunset', 'theme-solaris', 'theme-oceanic', 'theme-lavender', 'theme-vintage', 'theme-sakura'];
-    root.classList.remove(...themes);
+    root.className = 'theme-rose-gold';
 
     if (!isAuthLoading && user) {
       router.push('/dashboard');
