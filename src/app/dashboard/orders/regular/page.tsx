@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Printer, FileDown, MoreHorizontal, Calendar as CalendarIcon, ListFilter, Search, Loader2 } from "lucide-react";
+import { Eye, Printer, FileDown, MoreHorizontal, Calendar as CalendarIcon, ListFilter, Search, Loader2, HandCoins } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -64,8 +64,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getStaffList } from "@/app/actions";
+import { getStaffList, getDebtors, handleRecordDebtPaymentForRun, Debtor, handlePosSale } from "@/app/actions";
 import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type CartItem = {
   id: string;
@@ -84,6 +85,7 @@ type CompletedOrder = {
   paymentMethod: 'POS' | 'Cash' | 'Credit' | 'Split';
   partialPayments?: { method: string, amount: number }[];
   customerName?: string;
+  customerId?: string;
   staffId?: string;
   staffName?: string;
   status: 'Completed' | 'Pending' | 'Cancelled';
@@ -408,6 +410,83 @@ function OrdersTable({ orders, onSelectOne, onSelectAll, selectedOrders, allOrde
     );
 }
 
+function LogPaymentDialog({ debtor, onPaymentLogged, user }: { debtor: Debtor, onPaymentLogged: () => void, user: User | null }) {
+    const { toast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [amount, setAmount] = useState<number | string>('');
+
+    const handleSubmit = async () => {
+        const paymentAmount = Number(amount);
+        if (!debtor || !user || !paymentAmount || paymentAmount <= 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Invalid amount or customer.' });
+            return;
+        }
+        setIsLoading(true);
+        const result = await handleRecordDebtPaymentForRun({
+            runId: `debt-payment-${debtor.id}`,
+            customerId: debtor.id,
+            customerName: debtor.name,
+            driverId: user.staff_id,
+            driverName: user.name,
+            amount: paymentAmount,
+            paymentMethod: 'Cash'
+        });
+        if (result.success) {
+            toast({ title: 'Success', description: `Payment of ${formatCurrency(paymentAmount)} submitted for approval.` });
+            onPaymentLogged();
+            setAmount('');
+            setIsOpen(false);
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        }
+        setIsLoading(false);
+    }
+
+    return (
+         <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm"><HandCoins className="mr-2 h-4 w-4"/>Log Payment</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Log Payment for {debtor.name}</DialogTitle>
+                    <DialogDescription>
+                        Outstanding Balance: <span className="font-bold text-destructive">{formatCurrency(debtor.balance)}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="payment-amount">Amount Paid (₦)</Label>
+                    <Input id="payment-amount" type="number" value={amount} min="0" max={debtor.balance} onChange={(e) => setAmount(e.target.value)} />
+                </div>
+                <DialogFooter>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button disabled={isLoading}>
+                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                Submit for Approval
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                             <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Payment</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Are you sure you want to log a payment of {formatCurrency(Number(amount))} from {debtor.name}? This will be sent for approval.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleSubmit}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 
 function ExportDialog({ children, onExport }: { children: React.ReactNode, onExport: (options: { dateRange?: DateRange, status: string }) => void }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -456,6 +535,7 @@ function RegularOrdersPage() {
   const [user, setUser] = useState<User | null>(null);
   const [allOrders, setAllOrders] = useState<CompletedOrder[]>([]);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [date, setDate] = useState<DateRange | undefined>();
@@ -464,9 +544,20 @@ function RegularOrdersPage() {
   const [staffFilter, setStaffFilter] = useState('all');
   const [storeAddress, setStoreAddress] = useState<string | undefined>();
   const [visibleRows, setVisibleRows] = useState<number | 'all'>(10);
+  const [visibleDebtorRows, setVisibleDebtorRows] = useState<number | 'all'>(10);
 
   const selectedOrdersRef = useRef<HTMLDivElement>(null);
   const [ordersToPrint, setOrdersToPrint] = useState<CompletedOrder[]>([]);
+
+  const fetchDebtorsData = useCallback(async () => {
+    try {
+        const debtorsData = await getDebtors();
+        setDebtors(debtorsData);
+    } catch (e) {
+        toast({variant: 'destructive', title: 'Error', description: 'Could not fetch debtors'});
+    }
+  }, [toast]);
+  
 
   useEffect(() => {
     if (ordersToPrint.length > 0 && selectedOrdersRef.current) {
@@ -481,6 +572,9 @@ function RegularOrdersPage() {
   };
 
   useEffect(() => {
+    let unsubOrders: (() => void) | undefined;
+    let unsubDebtors: (() => void) | undefined;
+
     const fetchInitialData = async () => {
         try {
             const userStr = localStorage.getItem('loggedInUser');
@@ -506,7 +600,7 @@ function RegularOrdersPage() {
             setStaffList(staffListData as StaffMember[]);
 
             const ordersQuery = query(collection(db, "orders"), orderBy("date", "desc"));
-            const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
+            unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
                 const staffMap = new Map(staffListData.map(s => [s.id, s.name]));
                 const ordersList = snapshot.docs.map(doc => {
                     const data = doc.data();
@@ -527,24 +621,31 @@ function RegularOrdersPage() {
                 });
                 if (isLoading) setIsLoading(false);
             });
+            
+             // Fetch debtors and set up a listener
+            fetchDebtorsData();
+            const customersQuery = query(collection(db, 'customers'));
+            unsubDebtors = onSnapshot(customersQuery, () => {
+                fetchDebtorsData();
+            });
 
-            return () => unsubscribe();
+
         } catch (error) {
             console.error("Initialization failed:", error);
             setIsLoading(false);
         }
     };
     
-    const unsubscribePromise = fetchInitialData();
+    fetchInitialData();
 
     return () => {
-        unsubscribePromise.then(unsub => {
-            if (unsub) unsub();
-        });
+        unsubOrders?.();
+        unsubDebtors?.();
     };
-  }, [toast, isLoading]);
+  }, [toast, isLoading, fetchDebtorsData]);
 
   const isShowroomStaff = user?.role === 'Showroom Staff';
+  const isAdmin = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Accountant' || user?.role === 'Supervisor';
 
   const filteredOrders = useMemo(() => {
     return allOrders.filter(order => {
@@ -553,7 +654,9 @@ function RegularOrdersPage() {
       let staffMatch = true;
       if (isShowroomStaff) {
           staffMatch = order.staffId === user?.staff_id;
-      } else {
+      } else if (!isAdmin) { // For other non-admin roles, default to their own orders if applicable
+          staffMatch = order.staffId === user?.staff_id;
+      } else { // Admins
           staffMatch = staffFilter === 'all' || order.staffId === staffFilter;
       }
 
@@ -563,7 +666,7 @@ function RegularOrdersPage() {
       
       return dateMatch && searchMatch && paymentMatch && staffMatch;
     });
-  }, [allOrders, date, searchTerm, paymentMethodFilter, staffFilter, isShowroomStaff, user]);
+  }, [allOrders, date, searchTerm, paymentMethodFilter, staffFilter, isShowroomStaff, user, isAdmin]);
   
   const grandTotal = useMemo(() => {
     return filteredOrders.reduce((sum, order) => sum + order.total, 0);
@@ -572,6 +675,24 @@ function RegularOrdersPage() {
   const paginatedOrders = useMemo(() => {
     return visibleRows === 'all' ? filteredOrders : filteredOrders.slice(0, visibleRows);
   }, [filteredOrders, visibleRows]);
+
+  const filteredDebtors = useMemo(() => {
+    if (!user) return [];
+    if (isAdmin) return debtors;
+    // For showroom staff, this part is tricky without linking credit sales to staff.
+    // Assuming for now they can see all debtors but only log payments for their sales (logic in dialog)
+    if (isShowroomStaff) {
+        // Need to identify which debtors are theirs. This requires more complex data fetching
+        // For now, let's show all, but actions will be limited.
+        return debtors;
+    }
+    return [];
+  }, [debtors, user, isAdmin, isShowroomStaff]);
+  
+  const paginatedDebtors = useMemo(() => {
+    return visibleDebtorRows === 'all' ? filteredDebtors : filteredDebtors.slice(0, visibleDebtorRows);
+  }, [filteredDebtors, visibleDebtorRows]);
+
 
   const handleSelectOne = (orderId: string, checked: boolean) => {
     setSelectedOrders(prev => {
@@ -652,11 +773,12 @@ function RegularOrdersPage() {
   
   return (
     <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold font-headline">Regular Orders</h1>
-        <Tabs defaultValue="All Orders">
+        <h1 className="text-2xl font-bold font-headline">Orders</h1>
+        <Tabs defaultValue="all-orders">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                 <TabsList>
-                    {TABS.map(tab => <TabsTrigger key={tab} value={tab}>{tab}</TabsTrigger>)}
+                    <TabsTrigger value="all-orders">All Orders</TabsTrigger>
+                    {isAdmin && <TabsTrigger value="credit-orders">Credit Orders</TabsTrigger>}
                 </TabsList>
                  <div className="flex items-center gap-2">
                     <Button variant="outline" disabled={selectedOrders.length === 0} onClick={handlePrintSelected}><Printer className="mr-2"/> Print Selected</Button>
@@ -667,62 +789,102 @@ function RegularOrdersPage() {
                      )}
                 </div>
             </div>
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-wrap items-center justify-start gap-4">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                            <Input placeholder="Search by Order ID or customer..." className="pl-10 w-full sm:w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <TabsContent value="all-orders">
+                <Card>
+                    <CardHeader>
+                         <Tabs defaultValue="All Orders">
+                            <TabsList>
+                                {TABS.map(tab => <TabsTrigger key={tab} value={tab}>{tab}</TabsTrigger>)}
+                            </TabsList>
+                            <CardContent className="p-0 pt-4">
+                                <div className="flex flex-wrap items-center justify-start gap-4 mb-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                                        <Input placeholder="Search by Order ID or customer..." className="pl-10 w-full sm:w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    </div>
+                                    {!isShowroomStaff && (
+                                        <DateRangeWithInputs date={date} onDateChange={setDate} />
+                                    )}
+                                    <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+                                        <SelectTrigger className="w-full sm:w-[180px]">
+                                            <SelectValue placeholder="Filter by payment" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Payments</SelectItem>
+                                            <SelectItem value="Cash">Cash</SelectItem>
+                                            <SelectItem value="POS">POS</SelectItem>
+                                            <SelectItem value="Split">Split</SelectItem>
+                                            {!isShowroomStaff && <SelectItem value="Credit">Credit</SelectItem>}
+                                        </SelectContent>
+                                    </Select>
+                                    {!isShowroomStaff && (
+                                    <Select value={staffFilter} onValueChange={setStaffFilter}>
+                                        <SelectTrigger className="w-full sm:w-[180px]">
+                                            <SelectValue placeholder="Filter by staff" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Staff</SelectItem>
+                                            {salesStaff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    )}
+                                </div>
+                                <TabsContent value="All Orders">{renderContent(paginatedOrders)}</TabsContent>
+                                <TabsContent value="Completed">{renderContent(ordersByStatus('Completed'))}</TabsContent>
+                                <TabsContent value="Pending">{renderContent(ordersByStatus('Pending'))}</TabsContent>
+                                <TabsContent value="Cancelled">{renderContent(ordersByStatus('Cancelled'))}</TabsContent>
+                            </CardContent>
+                        </Tabs>
+                    </CardHeader>
+                    <CardFooter className="flex justify-between items-center">
+                        <div className="text-xs text-muted-foreground">
+                            Showing <strong>{paginatedOrders.length}</strong> of <strong>{filteredOrders.length}</strong> orders.
                         </div>
-                        {!isShowroomStaff && (
-                            <DateRangeWithInputs date={date} onDateChange={setDate} />
-                        )}
-                         <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <SelectValue placeholder="Filter by payment" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Payments</SelectItem>
-                                <SelectItem value="Cash">Cash</SelectItem>
-                                <SelectItem value="POS">POS</SelectItem>
-                                <SelectItem value="Split">Split</SelectItem>
-                                {!isShowroomStaff && <SelectItem value="Credit">Credit</SelectItem>}
-                            </SelectContent>
-                        </Select>
-                        {!isShowroomStaff && (
-                        <Select value={staffFilter} onValueChange={setStaffFilter}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <SelectValue placeholder="Filter by staff" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Staff</SelectItem>
-                                {salesStaff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        )}
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <TabsContent value="All Orders">
-                      {renderContent(paginatedOrders)}
-                    </TabsContent>
-                    <TabsContent value="Completed">
-                      {renderContent(ordersByStatus('Completed'))}
-                    </TabsContent>
-                    <TabsContent value="Pending">
-                      {renderContent(ordersByStatus('Pending'))}
-                    </TabsContent>
-                    <TabsContent value="Cancelled">
-                      {renderContent(ordersByStatus('Cancelled'))}
-                    </TabsContent>
-                </CardContent>
-                <CardFooter className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                        Showing <strong>{paginatedOrders.length}</strong> of <strong>{filteredOrders.length}</strong> orders.
-                    </div>
-                    <PaginationControls visibleRows={visibleRows} setVisibleRows={setVisibleRows} totalRows={filteredOrders.length} />
-                </CardFooter>
-            </Card>
+                        <PaginationControls visibleRows={visibleRows} setVisibleRows={setVisibleRows} totalRows={filteredOrders.length} />
+                    </CardFooter>
+                </Card>
+            </TabsContent>
+            <TabsContent value="credit-orders">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Credit Orders Management</CardTitle>
+                        <CardDescription>View and manage outstanding payments from registered customers.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Phone</TableHead>
+                                    <TableHead className="text-right">Total Owed</TableHead>
+                                    <TableHead className="text-right">Total Paid</TableHead>
+                                    <TableHead className="text-right">Outstanding</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedDebtors.length === 0 ? (
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">No outstanding credit orders.</TableCell></TableRow>
+                                ) : paginatedDebtors.map(debtor => (
+                                    <TableRow key={debtor.id}>
+                                        <TableCell>{debtor.name}</TableCell>
+                                        <TableCell>{debtor.phone}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(debtor.amountOwed)}</TableCell>
+                                        <TableCell className="text-right text-green-500">{formatCurrency(debtor.amountPaid)}</TableCell>
+                                        <TableCell className="text-right font-bold text-destructive">{formatCurrency(debtor.balance)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <LogPaymentDialog debtor={debtor} onPaymentLogged={fetchDebtorsData} user={user} />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    <CardFooter>
+                        <PaginationControls visibleRows={visibleDebtorRows} setVisibleRows={setVisibleDebtorRows} totalRows={filteredDebtors.length} />
+                    </CardFooter>
+                </Card>
+            </TabsContent>
         </Tabs>
         <div className="hidden">
            <div ref={selectedOrdersRef} className="p-8">
