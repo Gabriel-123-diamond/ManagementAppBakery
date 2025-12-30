@@ -529,9 +529,13 @@ function StorekeeperDashboard({ user }: { user: User }) {
     const productsQuery = collection(db, 'products');
     const unsubProducts = onSnapshot(productsQuery, (snapshot) => {
       const totalUnits = snapshot.docs.reduce((sum, doc) => sum + (doc.data().stock || 0), 0);
-      const categories = new Set(snapshot.docs.map(doc => doc.data().category));
-      setStats(prev => ({ ...prev, totalProductUnits: totalUnits, productCategories: categories.size }));
+      setStats(prev => ({ ...prev, totalProductUnits: totalUnits }));
       if (isLoading) setIsLoading(false);
+    });
+
+    const categoriesQuery = collection(db, 'product_categories');
+    const unsubCategories = onSnapshot(categoriesQuery, (snapshot) => {
+        setStats(prev => ({...prev, productCategories: snapshot.size}));
     });
 
     const ingredientsQuery = collection(db, 'ingredients');
@@ -565,6 +569,7 @@ function StorekeeperDashboard({ user }: { user: User }) {
       unsubProducts();
       unsubIngredients();
       unsubBatches();
+      unsubCategories();
     };
   }, [isLoading]);
 
