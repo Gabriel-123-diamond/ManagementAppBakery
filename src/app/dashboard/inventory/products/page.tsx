@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle, FileUp, Loader2, ArrowDownUp, Settings, Trash2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, FileUp, Loader2, ArrowDownUp, Settings, Trash2, Edit, Check } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -237,9 +237,11 @@ function ProductDialog({ product, onSave, onOpenChange, categories, user }: { pr
     )
 }
 
-function ManageCategoriesDialog({ categories, disabled, onSave, onDelete }: { categories: ProductCategory[], disabled: boolean, onSave: (name: string) => Promise<void>, onDelete: (id: string) => Promise<void>}) {
+function ManageCategoriesDialog({ categories, disabled, onSave, onDelete, onUpdate }: { categories: ProductCategory[], disabled: boolean, onSave: (name: string) => Promise<void>, onDelete: (id: string) => Promise<void>, onUpdate: (id: string, newName: string) => Promise<void>}) {
     const [isOpen, setIsOpen] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
+    const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSave = async () => {
@@ -247,6 +249,20 @@ function ManageCategoriesDialog({ categories, disabled, onSave, onDelete }: { ca
         setIsSubmitting(true);
         await onSave(newCategoryName);
         setNewCategoryName('');
+        setIsSubmitting(false);
+    }
+
+    const handleEditClick = (category: ProductCategory) => {
+        setEditingCategoryId(category.id);
+        setEditingName(category.name);
+    }
+    
+    const handleUpdate = async () => {
+        if (!editingCategoryId || !editingName.trim()) return;
+        setIsSubmitting(true);
+        await onUpdate(editingCategoryId, editingName);
+        setEditingCategoryId(null);
+        setEditingName('');
         setIsSubmitting(false);
     }
     
@@ -260,7 +276,7 @@ function ManageCategoriesDialog({ categories, disabled, onSave, onDelete }: { ca
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Manage Product Categories</DialogTitle>
-                    <DialogDescription>Add or remove product categories.</DialogDescription>
+                    <DialogDescription>Add, edit, or remove product categories.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     <div className="flex gap-2">
@@ -273,27 +289,42 @@ function ManageCategoriesDialog({ categories, disabled, onSave, onDelete }: { ca
                             {isSubmitting && <Loader2 className="mr-2 animate-spin"/>} Add
                         </Button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 border-t pt-4">
                         {categories.map(cat => (
                             <div key={cat.id} className="flex justify-between items-center bg-muted p-2 rounded-md">
-                                <span>{cat.name}</span>
-                                 <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-4 w-4 text-destructive"/></Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Deleting this category will not affect existing products, but it will be removed as an option. This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => onDelete(cat.id)}>Delete</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                                {editingCategoryId === cat.id ? (
+                                    <Input value={editingName} onChange={(e) => setEditingName(e.target.value)} className="h-8"/>
+                                ) : (
+                                    <span>{cat.name}</span>
+                                )}
+                                <div className="flex gap-1">
+                                    {editingCategoryId === cat.id ? (
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleUpdate} disabled={isSubmitting}>
+                                            <Check className="h-4 w-4 text-green-500" />
+                                        </Button>
+                                    ) : (
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(cat)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                     <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8"><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Deleting this category will not affect existing products, but it will be removed as an option. This action cannot be undone.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => onDelete(cat.id)}>Delete</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -332,7 +363,7 @@ export default function ProductsPage() {
         if (isLoading) setIsLoading(false);
     });
     
-    const unsubCategories = onSnapshot(collection(db, "product_categories"), (snapshot) => {
+    const unsubCategories = onSnapshot(query(collection(db, "product_categories"), orderBy("name")), (snapshot) => {
         const categoriesList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as ProductCategory[];
         setProductCategories(categoriesList);
     });
@@ -390,6 +421,15 @@ export default function ProductsPage() {
         toast({ title: "Success", description: `Category deleted.` });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not delete category.' });
+    }
+  }
+  
+  const handleUpdateCategory = async (id: string, newName: string) => {
+    try {
+        await updateDoc(doc(db, "product_categories", id), { name: newName });
+        toast({ title: 'Success', description: 'Category updated.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update category.' });
     }
   }
 
@@ -459,6 +499,7 @@ export default function ProductsPage() {
                     disabled={!canAddProducts}
                     onSave={handleSaveCategory}
                     onDelete={handleDeleteCategory}
+                    onUpdate={handleUpdateCategory}
                 />
             </div>
         </div>
@@ -539,6 +580,7 @@ export default function ProductsPage() {
                               height={40}
                               className="rounded-md object-cover"
                               data-ai-hint={product["data-ai-hint"]}
+                              unoptimized
                             />
                             <span>{product.name}</span>
                           </div>
