@@ -55,4 +55,13 @@ export interface PartialPayment {
     amount: number;
     confirmed: boolean;
 };
+
+export type Debtor = {
+    id: string;
+    name: string;
+    phone: string;
+    amountOwed: number;
+    amountPaid: number;
+    balance: number;
+}
     

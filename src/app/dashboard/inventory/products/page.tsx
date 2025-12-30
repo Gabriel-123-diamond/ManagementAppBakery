@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -23,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle, FileUp, Loader2, ArrowDownUp } from "lucide-react";
+import { MoreHorizontal, PlusCircle, FileUp, Loader2, ArrowDownUp, Settings, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +42,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -89,12 +90,9 @@ type User = {
   staff_id: string;
 };
 
-type LogEntry = {
-    date: Date;
-    type: 'Transfer Out' | 'Production Return' | 'Manual Update' | 'Sale' | 'Waste';
-    quantityChange: number;
-    details: string;
-    staff?: string;
+type ProductCategory = {
+  id: string;
+  name: string;
 }
 
 const getStatusBadge = (stock: number, threshold?: number) => {
@@ -109,7 +107,7 @@ const getStatusBadge = (stock: number, threshold?: number) => {
 };
 
 
-function ProductDialog({ product, onSave, onOpenChange, categories, user }: { product: Product | null, onSave: (p: Omit<Product, 'id'>) => void, onOpenChange: (open: boolean) => void, categories: string[], user: User | null }) {
+function ProductDialog({ product, onSave, onOpenChange, categories, user }: { product: Product | null, onSave: (p: Omit<Product, 'id'>) => void, onOpenChange: (open: boolean) => void, categories: ProductCategory[], user: User | null }) {
     const [name, setName] = useState("");
     const [category, setCategory] = useState("");
     const [costPrice, setCostPrice] = useState(0);
@@ -154,7 +152,7 @@ function ProductDialog({ product, onSave, onOpenChange, categories, user }: { pr
             setLowStockThreshold(product.lowStockThreshold || 20);
         } else {
             setName("");
-            setCategory(categories[0] || "");
+            setCategory(categories[0]?.name || "");
             setCostPrice(0);
             setPrice(0);
             setMinPrice('');
@@ -188,8 +186,8 @@ function ProductDialog({ product, onSave, onOpenChange, categories, user }: { pr
                                 <SelectValue placeholder="Select a category" />
                             </SelectTrigger>
                             <SelectContent>
-                                {categories.filter(c => c !== 'All').map(cat => (
-                                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                {categories.map(cat => (
+                                    <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -239,37 +237,84 @@ function ProductDialog({ product, onSave, onOpenChange, categories, user }: { pr
     )
 }
 
-function ExportDialog({ children, onExport }: { children: React.ReactNode, onExport: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
+function ManageCategoriesDialog({ categories, disabled, onSave, onDelete }: { categories: ProductCategory[], disabled: boolean, onSave: (name: string) => Promise<void>, onDelete: (id: string) => Promise<void>}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-  return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Export Products</DialogTitle>
-          <DialogDescription>
-            All current products will be included in the CSV file.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-          <Button onClick={() => { onExport(); setIsOpen(false); }}>Export to CSV</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
+    const handleSave = async () => {
+        if (!newCategoryName.trim()) return;
+        setIsSubmitting(true);
+        await onSave(newCategoryName);
+        setNewCategoryName('');
+        setIsSubmitting(false);
+    }
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={disabled}>
+                    <Settings className="mr-2" /> Manage Categories
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Manage Product Categories</DialogTitle>
+                    <DialogDescription>Add or remove product categories.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="flex gap-2">
+                        <Input 
+                            placeholder="New category name..."
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                        />
+                        <Button onClick={handleSave} disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 animate-spin"/>} Add
+                        </Button>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                        {categories.map(cat => (
+                            <div key={cat.id} className="flex justify-between items-center bg-muted p-2 rounded-md">
+                                <span>{cat.name}</span>
+                                 <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Deleting this category will not affect existing products, but it will be removed as an option. This action cannot be undone.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => onDelete(cat.id)}>Delete</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                 <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
 }
 
 export default function ProductsPage() {
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [activeStockTab, setActiveStockTab] = useState("all");
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [sort, setSort] = useState("name_asc");
 
   useEffect(() => {
@@ -278,26 +323,25 @@ export default function ProductsPage() {
         setUser(JSON.parse(storedUser));
     }
 
-    const productsCollection = collection(db, "products");
-    const unsubscribe = onSnapshot(productsCollection, (snapshot) => {
-        const productsList = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as Product[];
+    const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+        const productsList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Product[];
         setProducts(productsList);
         if (isLoading) setIsLoading(false);
     }, (error) => {
         console.error("Error fetching products:", error);
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Could not fetch products from the database.",
-        });
         if (isLoading) setIsLoading(false);
     });
+    
+    const unsubCategories = onSnapshot(collection(db, "product_categories"), (snapshot) => {
+        const categoriesList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as ProductCategory[];
+        setProductCategories(categoriesList);
+    });
 
-    return () => unsubscribe();
-  }, [toast, isLoading]);
+    return () => {
+        unsubProducts();
+        unsubCategories();
+    };
+  }, [isLoading]);
 
   const handleSaveProduct = async (productData: Omit<Product, 'id'>) => {
     try {
@@ -331,7 +375,26 @@ export default function ProductsPage() {
     }
   };
 
-  const { productsWithFinancials, grandTotalValue, grandTotalProfit } = useMemo(() => {
+  const handleSaveCategory = async (name: string) => {
+    try {
+        await addDoc(collection(db, "product_categories"), { name });
+        toast({ title: "Success", description: `Category "${name}" added.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not add category.' });
+    }
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+     try {
+        await deleteDoc(doc(db, "product_categories", id));
+        toast({ title: "Success", description: `Category deleted.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete category.' });
+    }
+  }
+
+
+  const { productsWithFinancials, grandTotalValue } = useMemo(() => {
     let filtered = products.filter(p => {
         if (activeStockTab === 'all') return true;
         const threshold = p.lowStockThreshold || 20;
@@ -342,27 +405,14 @@ export default function ProductsPage() {
     });
 
     let grandTotalValue = 0;
-    let grandTotalProfit = 0;
 
     const productsWithFinancials = filtered.map(p => {
-      const price = Number(p.price) || 0;
       const costPrice = Number(p.costPrice) || 0;
       const stock = Number(p.stock) || 0;
-
       const totalValue = stock * costPrice;
-      const totalProfit = (price - costPrice) * stock;
-
       grandTotalValue += totalValue;
-      grandTotalProfit += totalProfit;
 
-      return {
-        ...p,
-        price,
-        costPrice,
-        profitPerItem: price - costPrice,
-        totalValue,
-        totalProfit
-      };
+      return { ...p, totalValue };
     });
     
     productsWithFinancials.sort((a, b) => {
@@ -373,34 +423,15 @@ export default function ProductsPage() {
             case "price_desc": return b.price - a.price;
             case "stock_asc": return a.stock - b.stock;
             case "stock_desc": return b.stock - a.stock;
-            case "profit_asc": return a.totalProfit - b.totalProfit;
-            case "profit_desc": return b.totalProfit - b.totalProfit;
             case "category_asc": return a.category.localeCompare(b.category);
             case "category_desc": return b.category.localeCompare(a.category);
             default: return 0;
         }
     });
 
-    return { productsWithFinancials, grandTotalValue, grandTotalProfit };
+    return { productsWithFinancials, grandTotalValue };
   }, [products, activeStockTab, sort]);
   
-  const handleExport = () => {
-    const headers = ["ID", "Name", "Category", "Cost Price", "Selling Price", "Profit Per Item", "Stock", "Unit", "Total Value", "Total Profit"];
-    const rows = productsWithFinancials.map(p => 
-        [p.id, p.name, p.category, p.costPrice || 0, p.price, p.profitPerItem, p.stock, p.unit, p.totalValue, p.totalProfit].join(',')
-    );
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "products.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast({ title: "Success", description: "Product data exported." });
-  };
-
-  const categories = useMemo(() => ['All', ...new Set(products.map(p => p.category))], [products]);
   const canManageProducts = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper';
   const canViewFinancials = user?.role === 'Manager' || user?.role === 'Supervisor' || user?.role === 'Developer' || user?.role === 'Accountant';
   const canAddProducts = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper';
@@ -411,17 +442,25 @@ export default function ProductsPage() {
             product={editingProduct} 
             onSave={handleSaveProduct}
             onOpenChange={() => setEditingProduct(null)}
-            categories={categories}
+            categories={productCategories}
             user={user}
         />
 
       <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold font-headline">Products</h1>
-            {canAddProducts && (
-                <Button onClick={() => setEditingProduct({})}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Product
-                </Button>
-            )}
+            <div className="flex items-center gap-2">
+                {canAddProducts && (
+                    <Button onClick={() => setEditingProduct({})}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add New Product
+                    </Button>
+                )}
+                 <ManageCategoriesDialog 
+                    categories={productCategories}
+                    disabled={!canAddProducts}
+                    onSave={handleSaveCategory}
+                    onDelete={handleDeleteCategory}
+                />
+            </div>
         </div>
 
         <Card>
@@ -511,7 +550,7 @@ export default function ProductsPage() {
                         <TableCell>{product.stock > 0 ? `${product.stock} ${product.unit || ''}`.trim() : '--'}</TableCell>
                         {canViewFinancials && <TableCell>₦{product.totalValue.toFixed(2)}</TableCell>}
                         <TableCell>
-                            <DropdownMenu onOpenChange={(open) => setMenuOpenId(open ? product.id : null)}>
+                            <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                 <Button
                                     aria-haspopup="true"

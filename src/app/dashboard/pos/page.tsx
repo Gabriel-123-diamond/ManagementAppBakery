@@ -1,10 +1,9 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
 import Image from "next/image";
-import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit, FileSignature, Check, PlusCircle } from "lucide-react";
+import { Plus, Minus, X, Search, Trash2, Hand, CreditCard, Printer, User, Building, Loader2, Wallet, ArrowRightLeft, Edit, FileSignature, Check, PlusCircle, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,9 +50,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { collection, getDocs, doc, runTransaction, increment, getDoc, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { handlePosSale, initializePaystackTransaction } from "@/app/actions";
+import { handlePosSale, initializePaystackTransaction, getDebtors, handleRecordDebtPaymentForRun } from "@/app/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment, PaymentMethod } from "./types";
+import type { User, CartItem, Product, CompletedOrder, SelectableStaff, PartialPayment, PaymentMethod, Debtor } from "./types";
 import { ProductEditDialog } from "@/app/dashboard/components/product-edit-dialog";
 import { usePaystackPayment } from "react-paystack";
 
@@ -512,6 +511,131 @@ function SplitPaymentDialog({
   )
 }
 
+function CreditDashboard({ user }: { user: User | null }) {
+    const { toast } = useToast();
+    const [debtors, setDebtors] = useState<Debtor[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
+    const [paymentAmount, setPaymentAmount] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const fetchDebtors = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const data = await getDebtors();
+            setDebtors(data);
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch customer debt information.' });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
+
+    useEffect(() => {
+        fetchDebtors();
+    }, [fetchDebtors]);
+
+    const handleLogPayment = async () => {
+        if (!selectedDebtor || !paymentAmount || !user) return;
+
+        const amount = parseFloat(paymentAmount);
+        if (amount <= 0 || amount > selectedDebtor.balance) {
+            toast({ variant: 'destructive', title: 'Invalid Amount', description: 'Please enter a valid amount less than or equal to the balance.' });
+            return;
+        }
+
+        setIsSubmitting(true);
+        const result = await handleRecordDebtPaymentForRun({
+            runId: `pos-debt-payment-${selectedDebtor.id}`,
+            customerId: selectedDebtor.id,
+            customerName: selectedDebtor.name,
+            driverId: user.staff_id,
+            driverName: user.name,
+            amount: amount,
+            paymentMethod: 'Cash', // Or add a selector for this
+        });
+        if (result.success) {
+            toast({ title: 'Success', description: 'Debt payment has been logged for approval.' });
+            setSelectedDebtor(null);
+            setPaymentAmount('');
+            fetchDebtors();
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Customer Credit Balances</CardTitle>
+                <CardDescription>View outstanding debts from registered customers and log payments.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ScrollArea className="h-[calc(100vh_-_22rem)]">
+                    {isLoading ? (
+                        <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                    ) : debtors.length === 0 ? (
+                        <div className="flex justify-center items-center h-full text-muted-foreground"><p>No outstanding customer debts.</p></div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead className="text-right">Balance</TableHead>
+                                    <TableHead className="text-center">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {debtors.map(debtor => (
+                                    <TableRow key={debtor.id}>
+                                        <TableCell>
+                                            <div className="font-medium">{debtor.name}</div>
+                                            <div className="text-sm text-muted-foreground">{debtor.phone}</div>
+                                        </TableCell>
+                                        <TableCell className="text-right font-semibold text-destructive">₦{debtor.balance.toLocaleString()}</TableCell>
+                                        <TableCell className="text-center">
+                                            <DialogTrigger asChild>
+                                                <Button variant="outline" size="sm" onClick={() => setSelectedDebtor(debtor)}>Log Payment</Button>
+                                            </DialogTrigger>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </ScrollArea>
+            </CardContent>
+            <Dialog open={!!selectedDebtor} onOpenChange={() => setSelectedDebtor(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Log Payment for {selectedDebtor?.name}</DialogTitle>
+                        <DialogDescription>
+                            Outstanding Balance: <span className="font-bold text-destructive">₦{(selectedDebtor?.balance || 0).toLocaleString()}</span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-2">
+                        <Label htmlFor="payment-amount">Amount Received (₦)</Label>
+                        <Input
+                            id="payment-amount"
+                            type="number"
+                            value={paymentAmount}
+                            onChange={e => setPaymentAmount(e.target.value)}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSelectedDebtor(null)}>Cancel</Button>
+                        <Button onClick={handleLogPayment} disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            Submit for Approval
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </Card>
+    );
+}
+
 function POSPageContent() {
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
@@ -792,7 +916,7 @@ function POSPageContent() {
   
   const filteredProducts = useMemo(() => {
     let productsToFilter = products;
-    if (activeTab !== 'All') {
+    if (activeTab !== 'All' && activeTab !== 'held-orders' && activeTab !== 'credit-orders') {
         productsToFilter = productsToFilter.filter(p => p.category === activeTab);
     }
     if (searchTerm) {
@@ -875,6 +999,8 @@ function POSPageContent() {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-16 w-16 animate-spin" /></div>;
   }
 
+  const isShowroomStaff = user?.role === 'Showroom Staff';
+
   return (
      <>
      <div className="flex flex-col xl:flex-row gap-6 h-full print:hidden">
@@ -910,10 +1036,11 @@ function POSPageContent() {
                         <TabsTrigger value="held-orders" className="flex gap-2" disabled={!selectedStaffId}>
                             Held Orders <Badge>{heldOrders.length}</Badge>
                         </TabsTrigger>
+                        {isShowroomStaff && <TabsTrigger value="credit-orders">Credit Orders</TabsTrigger>}
                     </TabsList>
                 </div>
 
-                <TabsContent value={activeTab} className="mt-4 flex-grow">
+                <TabsContent value={activeTab} className="mt-4 flex-grow" hidden={activeTab === 'held-orders' || activeTab === 'credit-orders'}>
                     <ScrollArea className="h-[calc(100vh_-_24rem)] xl:h-auto">
                         {isLoadingProducts ? (
                             <div className="flex items-center justify-center h-full">
@@ -996,6 +1123,11 @@ function POSPageContent() {
                         )}
                     </ScrollArea>
                 </TabsContent>
+                {isShowroomStaff && (
+                    <TabsContent value="credit-orders" className="mt-4">
+                       <CreditDashboard user={user} />
+                    </TabsContent>
+                )}
             </Tabs>
             </CardContent>
         </Card>
@@ -1014,7 +1146,7 @@ function POSPageContent() {
                             </Button>
                             <CreateCustomerDialog onCustomerCreated={(c) => {}}>
                                 <Button variant={customerType === 'registered' ? 'default' : 'outline'}>
-                                    <Building className="mr-2 h-4 w-4" />
+                                    <UserCheck className="mr-2 h-4 w-4" />
                                     Registered
                                 </Button>
                             </CreateCustomerDialog>
