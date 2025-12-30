@@ -28,6 +28,9 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+   env: {
+    SEED_PASSWORD: process.env.SEED_PASSWORD,
+  }
 };
 
 export default nextConfig;

@@ -27,30 +27,42 @@ const productsData = [
     
     // BREAD
     { id: "prod_bread_1", name: "Family Loaf", price: 1600, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'bread loaf', costPrice: 1000, lowStockThreshold: 50, minPrice: 1500, maxPrice: 1700 },
-    { id: "prod_bread_2", name: "Short Loaf", price: 1300, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'short bread', costPrice: 800, lowStockThreshold: 50, minPrice: 1200, maxPrice: 1400 },
-    { id: "prod_bread_3", name: "Jumbo Loaf", price: 1800, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'jumbo bread', costPrice: 1200, lowStockThreshold: 25, minPrice: 1700, maxPrice: 1900 },
+    { id: "prod_bread_2", name: "Short Loaf", price: 1300, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'short bread', costPrice: 800, lowStockThreshold: 50, minPrice: 1100, maxPrice: 1300 },
+    { id: "prod_bread_3", name: "Jumbo Loaf", price: 1800, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'jumbo bread', costPrice: 1200, lowStockThreshold: 25, minPrice: 1600, maxPrice: 1800 },
     { id: "prod_bread_4", name: "Burger Loaf", price: 1800, stock: 0, category: 'Bread', unit: 'pack', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'burger bun', costPrice: 1100, lowStockThreshold: 50, minPrice: 1700, maxPrice: 1900 },
-    { id: "prod_bread_5", name: "Round Loaf", price: 300, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'round bread', costPrice: 180, lowStockThreshold: 100, minPrice: 250, maxPrice: 350 },
+    { id: "prod_bread_5", name: "Round Loaf", price: 350, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'round bread', costPrice: 180, lowStockThreshold: 100, minPrice: 260, maxPrice: 350 },
     { id: "prod_bread_6", name: "Breakfast loaf", price: 1000, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'breakfast bread', costPrice: 650, lowStockThreshold: 40, minPrice: 900, maxPrice: 1100 },
     { id: "prod_bread_7", name: "Mini Bite", price: 800, stock: 0, category: 'Bread', unit: 'pack', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'small bread', costPrice: 500, lowStockThreshold: 60, minPrice: 700, maxPrice: 900 },
     { id: "prod_bread_8", name: "Sandwich Bread", price: 1400, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sandwich bread', costPrice: 900, lowStockThreshold: 40, minPrice: 1300, maxPrice: 1500 },
+    { id: "prod_bread_9", name: "Creamy Delight", price: 1700, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'creamy bread', costPrice: 1100, lowStockThreshold: 40, minPrice: 1500, maxPrice: 1700 },
+    { id: "prod_bread_10", name: "MilkiByte", price: 600, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'milk bread', costPrice: 400, lowStockThreshold: 100, minPrice: 450, maxPrice: 600 },
 
 
     // DRINKS
     { id: "prod_drinks_1", name: "Coke", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'coca cola', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
     { id: "prod_drinks_2", name: "Fanta", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'fanta drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-    { id: "prod_drinks_3", name: "Sprite", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sprite drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-    { id: "prod_drinks_4", name: "Pepsi", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'pepsi drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
+    { id: "prod_drinks_3", name: "Sprite(Bottle)", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sprite drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
+    { id: "prod_drinks_4", name: "Pepsi(bottle)", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'pepsi drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
     { id: "prod_drinks_5", name: "7up", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': '7up drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-    { id: "prod_drinks_6", name: "Nutri Soya", price: 800, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'soya milk', costPrice: 600, lowStockThreshold: 80, minPrice: 750, maxPrice: 850 },
-    { id: "prod_drinks_7", name: "Nutri Choco", price: 800, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'choco milk', costPrice: 600, lowStockThreshold: 80, minPrice: 750, maxPrice: 850 },
-    { id: "prod_drinks_8", name: "5Alive", price: 800, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'juice box', costPrice: 600, lowStockThreshold: 80, minPrice: 750, maxPrice: 850 },
-    { id: "prod_drinks_9", name: "Holandia Yoghurt", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 1500, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
-    { id: "prod_drinks_10", name: "Freshyo", price: 800, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 550, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
-    { id: "prod_drinks_11", name: "Aquafina water", price: 300, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'bottled water', costPrice: 200, lowStockThreshold: 150, minPrice: 250, maxPrice: 350 },
+    { id: "prod_drinks_6", name: "Nutri Soya", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'soya milk', costPrice: 500, lowStockThreshold: 80, minPrice: 650, maxPrice: 750 },
+    { id: "prod_drinks_7", name: "Nutri Choco", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'choco milk', costPrice: 500, lowStockThreshold: 80, minPrice: 650, maxPrice: 750 },
+    { id: "prod_drinks_8", name: "5-Alive", price: 1200, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'juice box', costPrice: 900, lowStockThreshold: 80, minPrice: 1100, maxPrice: 1300 },
+    { id: "prod_drinks_9", name: "Hollandia Vanilla Flavour", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 1500, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
+    { id: "prod_drinks_10", name: "Freshyo Strawberry", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 500, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
+    { id: "prod_drinks_11", name: "Aquafina", price: 300, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'bottled water', costPrice: 200, lowStockThreshold: 150, minPrice: 250, maxPrice: 350 },
     { id: "prod_drinks_12", name: "Exotic", price: 1800, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'exotic juice', costPrice: 1400, lowStockThreshold: 20, minPrice: 1700, maxPrice: 1900 },
-    { id: "prod_drinks_13", name: "Beta Malt", price: 500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'malt drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
+    { id: "prod_drinks_13", name: "Beta Malt", price: 800, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'malt drink', costPrice: 600, lowStockThreshold: 100, minPrice: 750, maxPrice: 850 },
     { id: "prod_drinks_14", name: "Hi Malt", price: 500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'malt drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
+    { id: "prod_drinks_15", name: "Schweppes Chapman", price: 600, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'chapman drink', costPrice: 450, lowStockThreshold: 100, minPrice: 550, maxPrice: 650 },
+    { id: "prod_drinks_16", name: "Freshyo Mixed Berry", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 500, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
+    { id: "prod_drinks_17", name: "Freshyo Sweetened", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 500, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
+    { id: "prod_drinks_18", name: "Grand Malt", price: 800, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'malt drink', costPrice: 600, lowStockThreshold: 100, minPrice: 750, maxPrice: 850 },
+    { id: "prod_drinks_19", name: "Coke(Can)", price: 500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'coca cola can', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
+    { id: "prod_drinks_20", name: "Sprite(Can)", price: 500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sprite can', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
+    { id: "prod_drinks_21", name: "Monster Energy Drink", price: 1500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'energy drink', costPrice: 1200, lowStockThreshold: 50, minPrice: 1400, maxPrice: 1600 },
+    { id: "prod_drinks_22", name: "Vita Milk", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'vita milk', costPrice: 1600, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
+    { id: "prod_drinks_23", name: "Schweppes Virgin Mojito", price: 600, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'mojito drink', costPrice: 450, lowStockThreshold: 100, minPrice: 550, maxPrice: 650 },
+    { id: "prod_drinks_24", name: "Hollandia Sweetened", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 1500, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
 ];
 
 const staffData = [
@@ -90,8 +102,6 @@ const ingredientsData = [
     { id: "ing_12", name: "Water", stock: 0, unit: 'ml', costPerUnit: 0.00, expiryDate: null, lowStockThreshold: 5000 },
     { id: "ing_13", name: "Vegetable Oil", stock: 0, unit: 'ml', costPerUnit: 3.40, expiryDate: null, lowStockThreshold: 500 },
     { id: "ing_14", name: "Bread Improver", stock: 0, unit: 'g', costPerUnit: 60, expiryDate: null, lowStockThreshold: 100 },
-    
-    // New Ingredients
     { id: "ing_15", name: "Milk Phantasy", stock: 0, unit: 'g', costPerUnit: 15.00, expiryDate: null, lowStockThreshold: 50 },
     { id: "ing_16", name: "Conflaco Butter Scotch", stock: 0, unit: 'g', costPerUnit: 20.00, expiryDate: null, lowStockThreshold: 50 },
     { id: "ing_17", name: "Condensed Milk Flavor", stock: 0, unit: 'g', costPerUnit: 18.00, expiryDate: null, lowStockThreshold: 50 },
@@ -99,6 +109,11 @@ const ingredientsData = [
     { id: "ing_19", name: "Strawberry Flavor", stock: 0, unit: 'g', costPerUnit: 12.00, expiryDate: null, lowStockThreshold: 50 },
     { id: "ing_20", name: "Pineapple Flavor", stock: 0, unit: 'g', costPerUnit: 12.00, expiryDate: null, lowStockThreshold: 50 },
     { id: "ing_21", name: "Banana Flavor", stock: 0, unit: 'g', costPerUnit: 12.00, expiryDate: null, lowStockThreshold: 50 },
+    { id: "ing_22", name: "Softener", stock: 0, unit: 'g', costPerUnit: 5, expiryDate: null, lowStockThreshold: 500 },
+    { id: "ing_23", name: "Defab Flavour", stock: 0, unit: 'g', costPerUnit: 15, expiryDate: null, lowStockThreshold: 100 },
+    { id: "ing_24", name: "Powder Milk", stock: 0, unit: 'kg', costPerUnit: 8000, expiryDate: null, lowStockThreshold: 10 },
+    { id: "ing_25", name: "Bakers Milk", stock: 0, unit: 'tins', costPerUnit: 2500, expiryDate: null, lowStockThreshold: 5 },
+    { id: "ing_26", name: "Cello tape", stock: 0, unit: 'rolls', costPerUnit: 500, category: 'Other' },
 ];
 
 
@@ -458,6 +473,12 @@ export async function seedProductsAndIngredients(): Promise<ActionResult> {
             { id: 'cat_5', name: 'Maintenance', type: 'indirect' },
             { id: 'cat_6', name: 'Salary', type: 'indirect' },
         ], "cost_categories");
+        await batchCommit([
+             { id: "prod_cat_1", name: 'Bread' },
+             { id: "prod_cat_2", name: 'Snacks' },
+             { id: "prod_cat_3", name: 'Drinks' },
+             { id: "prod_cat_4", name: 'Cakes' },
+        ], "product_categories");
         return { success: true };
     } catch(e) { return { success: false, error: (e as Error).message } }
 }
@@ -556,7 +577,7 @@ export async function clearAllData(): Promise<ActionResult> {
         "directCosts", "indirectCosts", "wages", "closingStocks", 
         "discount_records", "announcements", "reports", "cost_categories",
         "payment_confirmations", "supply_requests", "ingredient_stock_logs",
-        "production_logs", "settings"
+        "production_logs", "settings", "product_categories"
     ];
     let allSucceeded = true;
     let finalError = "";
@@ -600,6 +621,56 @@ export async function seedFullData(): Promise<ActionResult> {
     }
     return { success: false, error: finalError };
 }
+
+export async function seedLastData(): Promise<ActionResult> {
+    try {
+        await clearAllData();
+        await batchCommit(staffData, "staff");
+        await batchCommit(productsData, "products");
+        await batchCommit(ingredientsData, "ingredients");
+
+        const storekeeper = staffData.find(s => s.role === 'Storekeeper');
+        if (!storekeeper) {
+            return { success: false, error: 'Storekeeper not found in staff data.' };
+        }
+
+        const showroomStockData = [
+            { productId: "prod_drinks_4", productName: "Pepsi(bottle)", stock: 0 },
+            { productId: "prod_drinks_1", productName: "Coke(bottle)", stock: 15 },
+            { productId: "prod_drinks_15", productName: "Schweppes Chapman", stock: 2 },
+            { productId: "prod_drinks_11", productName: "Aquafina", stock: 3 },
+            { productId: "prod_drinks_5", productName: "7up", stock: 7 },
+            { productId: "prod_drinks_3", productName: "Sprite(Bottle)", stock: 1 },
+            { productId: "prod_drinks_10", productName: "Freshyo Strawberry", stock: 11 },
+            { productId: "prod_drinks_16", productName: "Freshyo Mixed Berry", stock: 3 },
+            { productId: "prod_drinks_17", productName: "Freshyo Sweetened", stock: 0 },
+            { productId: "prod_drinks_7", productName: "Nutri Choco", stock: 5 },
+            { productId: "prod_drinks_6", productName: "Nutri Soya", stock: 3 },
+            { productId: "prod_drinks_12", productName: "Exotic", stock: 5 },
+            { productId: "prod_drinks_9", productName: "Hollandia Vanilla Flavour", stock: 1 },
+            { productId: "prod_drinks_18", productName: "Grand Malt", stock: 7 },
+            { productId: "prod_drinks_19", productName: "Coke(Can)", stock: 4 },
+            { productId: "prod_drinks_20", productName: "Sprite(Can)", stock: 3 },
+            { productId: "prod_drinks_21", productName: "Monster Energy Drink", stock: 5 },
+            { productId: "prod_drinks_22", productName: "Vita Milk", stock: 4 },
+            { productId: "prod_drinks_8", productName: "5-Alive", stock: 0 },
+            { productId: "prod_drinks_23", productName: "Schweppes Virgin Mojito", stock: 2 },
+            { productId: "prod_drinks_24", productName: "Hollandia Sweetened", stock: 0 },
+        ];
+
+        const batch = writeBatch(db);
+        showroomStockData.forEach(item => {
+            const stockRef = doc(db, 'staff', storekeeper.staff_id, 'personal_stock', item.productId);
+            batch.set(stockRef, item);
+        });
+        await batch.commit();
+
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
+    }
+}
+
 
 export async function seedSpecialScenario(): Promise<ActionResult> {
     try {

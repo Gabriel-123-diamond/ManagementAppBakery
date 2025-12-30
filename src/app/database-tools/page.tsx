@@ -21,6 +21,9 @@ import {
     seedRecipesOnly,
     consolidateDuplicateProducts,
     runSpecialProductCleanup,
+    clearAllData,
+    seedLastData,
+    verifySeedPassword,
 } from "@/app/seed/actions";
 import { getAllSalesRuns, resetSalesRun, type SalesRun, getStaffList, getProductsForStaff, removeStockFromStaff } from "@/app/actions";
 import { Loader2, DatabaseZap, Trash2, ArrowLeft, RefreshCw, MinusCircle, Wand2 } from "lucide-react";
@@ -49,7 +52,7 @@ const collectionsToClear = [
     "directCosts", "indirectCosts", "wages", "closingStocks", 
     "discount_records", "announcements", "reports", "cost_categories",
     "payment_confirmations", "supply_requests", "ingredient_stock_logs",
-    "production_logs", "settings"
+    "production_logs", "settings", "product_categories"
 ];
 
 
@@ -94,16 +97,17 @@ export default function DatabaseToolsPage() {
   }, [selectedStaffId]);
 
 
-  const handleVerification = () => {
-    if (password === 'password123') {
+  const handleVerification = async () => {
+    const result = await verifySeedPassword(password);
+    if (result.success) {
         setIsVerified(true);
         toast({ title: "Access Granted", description: "Database tools unlocked." });
     } else {
-        toast({ variant: "destructive", title: "Access Denied", description: "Incorrect password." });
+        toast({ variant: "destructive", title: "Access Denied", description: result.error || "Incorrect password." });
     }
   };
 
-  const handleSeedAction = (actionName: string, actionFn: () => Promise<{ success: boolean; error?: string }>) => {
+  const handleSeedAction = (actionName: string, actionFn: () => Promise<ActionResult>) => {
     setCurrentlySeeding(actionName);
     startTransition(true);
     actionFn().then(result => {
@@ -348,6 +352,18 @@ export default function DatabaseToolsPage() {
                     <CardContent className="flex flex-col gap-2">
                         <Button 
                             variant="secondary"
+                            onClick={() => handleSeedAction("Last Seed", seedLastData)}
+                            disabled={isPending}
+                            className="w-full"
+                        >
+                            {currentlySeeding === "Last Seed" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4"/>}
+                            Last Seed
+                        </Button>
+
+                        <Separator className="my-2" />
+
+                        <Button 
+                            variant="secondary"
                             onClick={() => handleSeedAction("Full Database", seedFullData)}
                             disabled={isPending}
                             className="w-full"
@@ -487,7 +503,28 @@ export default function DatabaseToolsPage() {
                     <CardDescription>Select collections to clear. Actions are irreversible.</CardDescription>
                 </CardHeader>
                  <CardContent className="space-y-4">
-                    <h4 className="font-semibold text-sm">Select Collections to Clear</h4>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" className="w-full" disabled={isPending}>
+                                <Trash2 className="mr-2 h-4 w-4"/>
+                                Clear the Database
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This action will permanently delete all data from all collections. This action cannot be undone.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleSeedAction('Clear All Data', clearAllData)} className="bg-destructive hover:bg-destructive/90">Yes, Clear Everything</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <Separator />
+                    <h4 className="font-semibold text-sm">Select Individual Collections to Clear</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
                        {collectionsToClear.map(name => (
                          <div key={name} className="flex items-center gap-2 p-2 border rounded-md">
