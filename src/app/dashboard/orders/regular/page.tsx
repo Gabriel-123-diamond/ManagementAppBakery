@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
@@ -679,11 +680,10 @@ function RegularOrdersPage() {
   const filteredDebtors = useMemo(() => {
     if (!user) return [];
     if (isAdmin) return debtors;
-    // For showroom staff, this part is tricky without linking credit sales to staff.
-    // Assuming for now they can see all debtors but only log payments for their sales (logic in dialog)
+    
+    // Showroom staff can see all debtors but can only log payment for their own sales. 
+    // The actual enforcement happens in the LogPaymentDialog logic. For display, we show them.
     if (isShowroomStaff) {
-        // Need to identify which debtors are theirs. This requires more complex data fetching
-        // For now, let's show all, but actions will be limited.
         return debtors;
     }
     return [];

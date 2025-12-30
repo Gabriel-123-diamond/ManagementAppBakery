@@ -626,108 +626,76 @@ export async function seedLastData(): Promise<ActionResult> {
     try {
         await clearAllData();
 
-        // Seed product categories
-        await batchCommit([
-             { id: "prod_cat_1", name: 'Bread' },
-             { id: "prod_cat_2", name: 'Snacks' },
-             { id: "prod_cat_3", name: 'Drinks' },
-             { id: "prod_cat_4", name: 'Cakes' },
-        ], "product_categories");
-
-        const lastSeedProducts = [
-            { id: "prod_bread_9", name: "Creamy Delight", price: 1700, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'creamy bread', costPrice: 1100, lowStockThreshold: 40, minPrice: 1500, maxPrice: 1700 },
-            { id: "prod_bread_10", name: "MilkiByte", price: 600, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'milk bread', costPrice: 400, lowStockThreshold: 100, minPrice: 450, maxPrice: 600 },
-            { id: "prod_bread_2", name: "Short Loaf", price: 1300, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'short bread', costPrice: 800, lowStockThreshold: 50, minPrice: 1100, maxPrice: 1300 },
-            { id: "prod_bread_3", name: "Jumbo Loaf", price: 1800, stock: 0, category: 'Bread', unit: 'loaf', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'jumbo bread', costPrice: 1200, lowStockThreshold: 25, minPrice: 1600, maxPrice: 1800 },
-            { id: "prod_bread_5", name: "Round Loaf", price: 350, stock: 0, category: 'Bread', unit: 'pcs', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'round bread', costPrice: 180, lowStockThreshold: 100, minPrice: 260, maxPrice: 350 },
-            
-            { id: "prod_drinks_4", name: "Pepsi(bottle)", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'pepsi drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-            { id: "prod_drinks_1", name: "Coke", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'coca cola', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-            { id: "prod_drinks_15", name: "Schweppes Chapman", price: 600, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'chapman drink', costPrice: 450, lowStockThreshold: 100, minPrice: 550, maxPrice: 650 },
-            { id: "prod_drinks_5", name: "7up", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': '7up drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-            { id: "prod_drinks_3", name: "Sprite(Bottle)", price: 500, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sprite drink', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-            { id: "prod_drinks_10", name: "Freshyo Strawberry", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 500, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
-            { id: "prod_drinks_16", name: "Freshyo Mixed Berry", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 500, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
-            { id: "prod_drinks_17", name: "Freshyo Sweetened", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 500, lowStockThreshold: 60, minPrice: 650, maxPrice: 750 },
-            { id: "prod_drinks_7", name: "Nutri Choco", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'choco milk', costPrice: 500, lowStockThreshold: 80, minPrice: 650, maxPrice: 750 },
-            { id: "prod_drinks_6", name: "Nutri Soya", price: 700, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'soya milk', costPrice: 500, lowStockThreshold: 80, minPrice: 650, maxPrice: 750 },
-            { id: "prod_drinks_12", name: "Exotic", price: 1800, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'exotic juice', costPrice: 1400, lowStockThreshold: 20, minPrice: 1700, maxPrice: 1900 },
-            { id: "prod_drinks_9", name: "Hollandia Vanilla Flavour", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 1500, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
-            { id: "prod_drinks_18", name: "Grand Malt", price: 800, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'malt drink', costPrice: 600, lowStockThreshold: 100, minPrice: 750, maxPrice: 850 },
-            { id: "prod_drinks_19", name: "Coke(Can)", price: 500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'coca cola can', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-            { id: "prod_drinks_20", name: "Sprite(Can)", price: 500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'sprite can', costPrice: 350, lowStockThreshold: 100, minPrice: 450, maxPrice: 550 },
-            { id: "prod_drinks_21", name: "Monster Energy Drink", price: 1500, stock: 0, category: 'Drinks', unit: 'can', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'energy drink', costPrice: 1200, lowStockThreshold: 50, minPrice: 1400, maxPrice: 1600 },
-            { id: "prod_drinks_22", name: "Vita Milk", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'vita milk', costPrice: 1600, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
-            { id: "prod_drinks_8", name: "5-Alive", price: 1200, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'juice box', costPrice: 900, lowStockThreshold: 80, minPrice: 1100, maxPrice: 1300 },
-            { id: "prod_drinks_23", name: "Schweppes Virgin Mojito", price: 600, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'mojito drink', costPrice: 450, lowStockThreshold: 100, minPrice: 550, maxPrice: 650 },
-            { id: "prod_drinks_24", name: "Hollandia Sweetened", price: 2000, stock: 0, category: 'Drinks', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'yoghurt drink', costPrice: 1500, lowStockThreshold: 40, minPrice: 1900, maxPrice: 2100 },
-            { id: "prod_drinks_11", name: "Aquafina", price: 300, stock: 0, category: 'Water', unit: 'bottle', image: "https://placehold.co/150x150.png", 'data-ai-hint': 'bottled water', costPrice: 200, lowStockThreshold: 150, minPrice: 250, maxPrice: 350 },
+        const productCategories = [
+            { id: "prod_cat_1", name: 'Bread' },
+            { id: "prod_cat_2", name: 'Snacks' },
+            { id: "prod_cat_3", name: 'Drinks' },
+            { id: "prod_cat_4", name: 'Water' },
+            { id: "prod_cat_5", name: 'Cakes' },
         ];
+        await batchCommit(productCategories, "product_categories");
+
+        const productMapping: { [key: string]: Partial<Product> } = {
+            "Creamy Delight": { price: 1700, minPrice: 1500, maxPrice: 1700 },
+            "MilkiByte": { price: 600, minPrice: 450, maxPrice: 600 },
+            "Short Loaf": { price: 1300, minPrice: 1100, maxPrice: 1300 },
+            "Jumbo Loaf": { price: 1800, minPrice: 1600, maxPrice: 1800 },
+            "Round Loaf": { price: 350, minPrice: 260, maxPrice: 350 },
+            "Pepsi(bottle)": { price: 500 }, "Coke": { price: 500 }, "Schweppes Chapman": { price: 600 },
+            "7up": { price: 500 }, "Sprite(Bottle)": { price: 500 }, "Freshyo Strawberry": { price: 700 },
+            "Freshyo Mixed Berry": { price: 700 }, "Freshyo Sweetened": { price: 700 }, "Nutri Choco": { price: 700 },
+            "Nutri Soya": { price: 700 }, "Exotic": { price: 1800 }, "Hollandia Vanilla Flavour": { price: 2000 },
+            "Grand Malt": { price: 800 }, "Coke(Can)": { price: 500 }, "Sprite(Can)": { price: 500 },
+            "Monster Energy Drink": { price: 1500 }, "Vita Milk": { price: 2000 }, "5-Alive": { price: 1200 },
+            "Schweppes Virgin Mojito": { price: 600 }, "Hollandia Sweetened": { price: 2000 }, "Aquafina": { price: 300 }
+        };
+
+        const lastSeedProducts = productsData
+            .filter(p => productMapping[p.name])
+            .map(p => ({ ...p, ...productMapping[p.name], stock: 0 }));
+
         await batchCommit(lastSeedProducts, "products");
 
-        const lastSeedIngredients = [
-            { id: "ing_1", name: "Flour", stock: 0, unit: 'g', costPerUnit: 1.09, expiryDate: null, lowStockThreshold: 10000 },
-            { id: "ing_7", name: "Butter", stock: 11755, unit: 'g', costPerUnit: 2.53, expiryDate: null, lowStockThreshold: 1000 },
-            { id: "ing_2", name: "Sugar", stock: 1000, unit: 'g', costPerUnit: 1.58, expiryDate: null, lowStockThreshold: 1000 },
-            { id: "ing_3", name: "Salt", stock: 37750, unit: 'g', costPerUnit: 0.34, expiryDate: null, lowStockThreshold: 500 },
-            { id: "ing_9", name: "Zeast Flavor", stock: 240, unit: 'g', costPerUnit: 27.00, expiryDate: null, lowStockThreshold: 50 },
-            { id: "ing_4", name: "Yeast", stock: 30, unit: 'g', costPerUnit: 6.40, expiryDate: null, lowStockThreshold: 200 },
-            { id: "ing_10", name: "Lux Essence", stock: 115, unit: 'g', costPerUnit: 17.00, expiryDate: null, lowStockThreshold: 50 },
-            { id: "ing_8", name: "Butterscotch Flavor", stock: 860, unit: 'g', costPerUnit: 10.00, expiryDate: null, lowStockThreshold: 50 },
-            { id: "ing_11", name: "Eggs", stock: 16, unit: 'pcs', costPerUnit: 176.67, expiryDate: null, lowStockThreshold: 24 },
-            { id: "ing_24", name: "Powder Milk", stock: 24355, unit: 'g', costPerUnit: 8, expiryDate: null, lowStockThreshold: 10000 },
-            { id: "ing_6", name: "Tin Milk", stock: 0, unit: 'pcs', costPerUnit: 1000.00, expiryDate: null, lowStockThreshold: 10 },
-            { id: "ing_14", name: "Bread Improver", stock: 421000, unit: 'g', costPerUnit: 60, expiryDate: null, lowStockThreshold: 100 },
-            { id: "ing_5", name: "Preservative", stock: 1000, unit: 'g', costPerUnit: 8.00, expiryDate: null, lowStockThreshold: 100 },
-            { id: "ing_13", name: "Vegetable Oil", stock: 0, unit: 'ml', costPerUnit: 3.40, expiryDate: null, lowStockThreshold: 500 },
-            { id: "ing_25", name: "Bakers Milk", stock: 12, unit: 'tins', costPerUnit: 2500, expiryDate: null, lowStockThreshold: 5 },
-            { id: "ing_22", name: "Softener", stock: 485, unit: 'g', costPerUnit: 5, expiryDate: null, lowStockThreshold: 500 },
-            { id: "ing_23", name: "Defab Flavour", stock: 360, unit: 'g', costPerUnit: 15, expiryDate: null, lowStockThreshold: 100 },
-            { id: "ing_17", name: "Condensed Milk Flavor", stock: 500, unit: 'g', costPerUnit: 18.00, expiryDate: null, lowStockThreshold: 50 },
-        ];
+        const ingredientStockMapping: { [key: string]: number } = {
+            "Butter": 11755, "Sugar": 1000, "Salt": 37750, "Zeast Flavor": 240, "Yeast": 30,
+            "Lux Essence": 115, "Butterscotch Flavor": 860, "Eggs": 16, "Powder Milk": 24355,
+            "Bread Improver": 421000, "Preservative": 1000, "Bakers Milk": 12, "Softener": 485,
+            "Defab Flavour": 360, "Condensed Milk Flavor": 500
+        };
+
+        const lastSeedIngredients = ingredientsData.map(i => ({
+            ...i,
+            stock: ingredientStockMapping[i.name] || 0,
+        }));
         await batchCommit(lastSeedIngredients, "ingredients");
 
-        const otherSuppliesData = [
-            { id: "sup_cello_tape", name: "Cello tape", stock: 4, unit: "rolls", costPerUnit: 500, category: 'Other' },
-        ];
+        const otherSuppliesData = [{ id: "sup_cello_tape", name: "Cello tape", stock: 4, unit: "rolls", costPerUnit: 500, category: 'Other' }];
         await batchCommit(otherSuppliesData, "other_supplies");
 
         const storekeeper = staffData.find(s => s.role === 'Storekeeper');
         if (storekeeper) {
-            const storekeeperStockData = [
-                { productId: "prod_drinks_4", productName: "Pepsi(bottle)", stock: 0 },
-                { productId: "prod_drinks_1", productName: "Coke", stock: 15 },
-                { productId: "prod_drinks_15", productName: "Schweppes Chapman", stock: 2 },
-                { productId: "prod_drinks_11", productName: "Aquafina", stock: 3 },
-                { productId: "prod_drinks_5", productName: "7up", stock: 7 },
-                { productId: "prod_drinks_3", productName: "Sprite(Bottle)", stock: 1 },
-                { productId: "prod_drinks_10", productName: "Freshyo Strawberry", stock: 11 },
-                { productId: "prod_drinks_16", productName: "Freshyo Mixed Berry", stock: 3 },
-                { productId: "prod_drinks_17", productName: "Freshyo Sweetened", stock: 0 },
-                { productId: "prod_drinks_7", productName: "Nutri Choco", stock: 5 },
-                { productId: "prod_drinks_6", productName: "Nutri Soya", stock: 3 },
-                { productId: "prod_drinks_12", productName: "Exotic", stock: 5 },
-                { productId: "prod_drinks_9", productName: "Hollandia Vanilla Flavour", stock: 1 },
-                { productId: "prod_drinks_18", productName: "Grand Malt", stock: 7 },
-                { productId: "prod_drinks_19", productName: "Coke(Can)", stock: 4 },
-                { productId: "prod_drinks_20", productName: "Sprite(Can)", stock: 3 },
-                { productId: "prod_drinks_21", productName: "Monster Energy Drink", stock: 5 },
-                { productId: "prod_drinks_22", productName: "Vita Milk", stock: 4 },
-                { productId: "prod_drinks_8", productName: "5-Alive", stock: 0 },
-                { productId: "prod_drinks_23", productName: "Schweppes Virgin Mojito", stock: 2 },
-                { productId: "prod_drinks_24", productName: "Hollandia Sweetened", stock: 0 },
-            ];
-
+            const storekeeperStockData: { [key: string]: number } = {
+                "Pepsi(bottle)": 0, "Coke": 15, "Schweppes Chapman": 2, "Aquafina": 3, "7up": 7,
+                "Sprite(Bottle)": 1, "Freshyo Strawberry": 11, "Freshyo Mixed Berry": 3, "Freshyo Sweetened": 0,
+                "Nutri Choco": 5, "Nutri Soya": 3, "Exotic": 5, "Hollandia Vanilla Flavour": 1,
+                "Grand Malt": 7, "Coke(Can)": 4, "Sprite(Can)": 3, "Monster Energy Drink": 5,
+                "Vita Milk": 4, "5-Alive": 0, "Schweppes Virgin Mojito": 2, "Hollandia Sweetened": 0
+            };
+            
             const batch = writeBatch(db);
-            storekeeperStockData.forEach(item => {
-                const stockRef = doc(db, 'staff', storekeeper.staff_id, 'personal_stock', item.productId);
-                batch.set(stockRef, item);
-            });
+            for (const productName in storekeeperStockData) {
+                const product = productsData.find(p => p.name === productName);
+                if (product) {
+                    const stockRef = doc(db, 'staff', storekeeper.staff_id, 'personal_stock', product.id);
+                    batch.set(stockRef, { productId: product.id, productName: product.name, stock: storekeeperStockData[productName] });
+                }
+            }
             await batch.commit();
         }
 
         return { success: true };
     } catch (e) {
+        console.error("Error in Last Seed:", e);
         return { success: false, error: (e as Error).message };
     }
 }
@@ -838,3 +806,4 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
 
 
     
+
