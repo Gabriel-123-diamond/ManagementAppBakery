@@ -623,6 +623,11 @@ export async function seedFullData(): Promise<ActionResult> {
 }
 
 export async function seedLastData(): Promise<ActionResult> {
+    type Product = {
+        id: string; name: string; price: number; stock: number; category: string;
+        unit: string; image: string; 'data-ai-hint': string; costPrice?: number;
+        lowStockThreshold?: number; minPrice?: number; maxPrice?: number;
+    };
     try {
         await clearAllData();
 
@@ -641,13 +646,13 @@ export async function seedLastData(): Promise<ActionResult> {
             "Short Loaf": { price: 1300, minPrice: 1100, maxPrice: 1300 },
             "Jumbo Loaf": { price: 1800, minPrice: 1600, maxPrice: 1800 },
             "Round Loaf": { price: 350, minPrice: 260, maxPrice: 350 },
-            "Pepsi(bottle)": { price: 500 }, "Coke": { price: 500 }, "Schweppes Chapman": { price: 600 },
+            "Pepsi(bottle)": { price: 500 }, "Coke": { price: 500, name: 'Coke(bottle)' }, "Schweppes Chapman": { price: 600 },
             "7up": { price: 500 }, "Sprite(Bottle)": { price: 500 }, "Freshyo Strawberry": { price: 700 },
             "Freshyo Mixed Berry": { price: 700 }, "Freshyo Sweetened": { price: 700 }, "Nutri Choco": { price: 700 },
             "Nutri Soya": { price: 700 }, "Exotic": { price: 1800 }, "Hollandia Vanilla Flavour": { price: 2000 },
             "Grand Malt": { price: 800 }, "Coke(Can)": { price: 500 }, "Sprite(Can)": { price: 500 },
             "Monster Energy Drink": { price: 1500 }, "Vita Milk": { price: 2000 }, "5-Alive": { price: 1200 },
-            "Schweppes Virgin Mojito": { price: 600 }, "Hollandia Sweetened": { price: 2000 }, "Aquafina": { price: 300 }
+            "Schweppes Virgin Mojito": { price: 600 }, "Hollandia Sweetened": { price: 2000 }, "Aquafina": { price: 300, category: 'Water' }
         };
 
         const lastSeedProducts = productsData
@@ -657,10 +662,21 @@ export async function seedLastData(): Promise<ActionResult> {
         await batchCommit(lastSeedProducts, "products");
 
         const ingredientStockMapping: { [key: string]: number } = {
-            "Butter": 11755, "Sugar": 1000, "Salt": 37750, "Zeast Flavor": 240, "Yeast": 30,
-            "Lux Essence": 115, "Butterscotch Flavor": 860, "Eggs": 16, "Powder Milk": 24355,
-            "Bread Improver": 421000, "Preservative": 1000, "Bakers Milk": 12, "Softener": 485,
-            "Defab Flavour": 360, "Condensed Milk Flavor": 500
+            "Butter": 11755,
+            "Sugar": 1000,
+            "Salt": 37750,
+            "Zeast Flavor": 240, // Note: "Zest" in prompt, "Zeast Flavor" in data
+            "Yeast": 30,
+            "Lux Essence": 115,
+            "Butterscotch Flavor": 860, // 500 + 360
+            "Eggs": 16, // 13 + 3
+            "Powder Milk": 24355, // 23000 + 1355
+            "Bread Improver": 421000, // 1000 + 420000
+            "Preservative": 1000,
+            "Bakers Milk": 12,
+            "Softener": 485,
+            "Defab Flavour": 360,
+            "Condensed Milk Flavor": 500,
         };
 
         const lastSeedIngredients = ingredientsData.map(i => ({
@@ -675,7 +691,7 @@ export async function seedLastData(): Promise<ActionResult> {
         const storekeeper = staffData.find(s => s.role === 'Storekeeper');
         if (storekeeper) {
             const storekeeperStockData: { [key: string]: number } = {
-                "Pepsi(bottle)": 0, "Coke": 15, "Schweppes Chapman": 2, "Aquafina": 3, "7up": 7,
+                "Pepsi(bottle)": 0, "Coke(bottle)": 15, "Schweppes Chapman": 2, "Aquafina": 3, "7up": 7,
                 "Sprite(Bottle)": 1, "Freshyo Strawberry": 11, "Freshyo Mixed Berry": 3, "Freshyo Sweetened": 0,
                 "Nutri Choco": 5, "Nutri Soya": 3, "Exotic": 5, "Hollandia Vanilla Flavour": 1,
                 "Grand Malt": 7, "Coke(Can)": 4, "Sprite(Can)": 3, "Monster Energy Drink": 5,
@@ -683,11 +699,14 @@ export async function seedLastData(): Promise<ActionResult> {
             };
             
             const batch = writeBatch(db);
+            const allProducts = await getDocs(collection(db, 'products'));
+            const productMapByName = new Map(allProducts.docs.map(doc => [doc.data().name, doc.id]));
+
             for (const productName in storekeeperStockData) {
-                const product = productsData.find(p => p.name === productName);
-                if (product) {
-                    const stockRef = doc(db, 'staff', storekeeper.staff_id, 'personal_stock', product.id);
-                    batch.set(stockRef, { productId: product.id, productName: product.name, stock: storekeeperStockData[productName] });
+                const productId = productMapByName.get(productName);
+                if (productId) {
+                    const stockRef = doc(db, 'staff', storekeeper.staff_id, 'personal_stock', productId);
+                    batch.set(stockRef, { productId: productId, productName: productName, stock: storekeeperStockData[productName] });
                 }
             }
             await batch.commit();
@@ -806,4 +825,5 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
 
 
     
+
 
