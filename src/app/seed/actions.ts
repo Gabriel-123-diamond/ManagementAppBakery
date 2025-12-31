@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { db } from "@/lib/firebase";
@@ -211,20 +210,19 @@ export async function verifySeedPassword(password: string): Promise<ActionResult
   }
 }
 
-async function batchCommit(data: any[], collectionName: string): Promise<ActionResult> {
-    const BATCH_SIZE = 500;
+async function batchCommit(data: any[], collectionName: string, merge = false): Promise<ActionResult> {
+    const BATCH_SIZE = 499; // Firestore batch limit is 500
     try {
         for (let i = 0; i < data.length; i += BATCH_SIZE) {
             const batch = writeBatch(db);
             const chunk = data.slice(i, i + BATCH_SIZE);
             for (const item of chunk) {
-                let docRef;
                 const id = item.id || item.staff_id;
-                if (id) {
-                    docRef = doc(db, collectionName, id);
-                } else {
-                    docRef = doc(collection(db, collectionName));
+                if (!id) {
+                    console.warn(`Item in ${collectionName} is missing an ID, skipping:`, item);
+                    continue;
                 }
+                const docRef = doc(db, collectionName, id);
                 
                 const itemWithTimestamps = { ...item };
                 for (const key of Object.keys(itemWithTimestamps)) {
@@ -232,10 +230,13 @@ async function batchCommit(data: any[], collectionName: string): Promise<ActionR
                         itemWithTimestamps[key] = Timestamp.fromDate(itemWithTimestamps[key]);
                     }
                 }
-
-                batch.set(docRef, itemWithTimestamps);
+                
+                if (merge) {
+                    batch.set(docRef, itemWithTimestamps, { merge: true });
+                } else {
+                    batch.set(docRef, itemWithTimestamps);
+                }
             }
-            console.log(`Committing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(data.length / BATCH_SIZE)} for ${collectionName}...`);
             await batch.commit();
         }
         return { success: true };
@@ -716,6 +717,112 @@ export async function seedLastData(): Promise<ActionResult> {
     }
 }
 
+export async function seedDoneRecord(): Promise<ActionResult> {
+    try {
+        const batch = writeBatch(db);
+
+        // Products
+        const productsToSeed = [
+            { id: "prod_bread_9", name: "Creamy Delight", price: 1700, minPrice: 1500, maxPrice: 1700 },
+            { id: "prod_bread_10", name: "MilkiByte", price: 600, minPrice: 450, maxPrice: 600 },
+            { id: "prod_bread_2", name: "Short loaf", price: 1300, minPrice: 1100, maxPrice: 1300 },
+            { id: "prod_bread_3", name: "Jumbo Loaf", price: 1800, minPrice: 1600, maxPrice: 1800 },
+            { id: "prod_bread_5", name: "Round Loaf", price: 350, minPrice: 260, maxPrice: 350 },
+            { id: "prod_drinks_4", name: "Pepsi(bottle)", price: 500 },
+            { id: "prod_drinks_1", name: "Coke(bottle)", price: 500 },
+            { id: "prod_drinks_15", name: "Schweppes Chapman", price: 600 },
+            { id: "prod_drinks_5", name: "7up", price: 500 },
+            { id: "prod_drinks_3", name: "Sprite(Bottle)", price: 500 },
+            { id: "prod_drinks_10", name: "Freshyo Strawberry", price: 700 },
+            { id: "prod_drinks_16", name: "Freshyo Mixed Berry", price: 700 },
+            { id: "prod_drinks_17", name: "Freshyo Sweetened", price: 700 },
+            { id: "prod_drinks_7", name: "Nutri Choco", price: 700 },
+            { id: "prod_drinks_6", name: "Nutri Soya", price: 700 },
+            { id: "prod_drinks_12", name: "Exotic", price: 1800 },
+            { id: "prod_drinks_9", name: "Hollandia Vanilla Flavour", price: 2000 },
+            { id: "prod_drinks_18", name: "Grand Malt", price: 800 },
+            { id: "prod_drinks_19", name: "Coke(Can)", price: 500 },
+            { id: "prod_drinks_20", name: "Sprite(Can)", price: 500 },
+            { id: "prod_drinks_21", name: "Monster Energy Drink", price: 1500 },
+            { id: "prod_drinks_22", name: "Vita Milk", price: 2000 },
+            { id: "prod_drinks_8", name: "5-Alive", price: 1200 },
+            { id: "prod_drinks_23", name: "Schweppes Virgin Mojito", price: 600 },
+            { id: "prod_drinks_24", name: "Hollandia Sweetened", price: 2000 },
+            { id: "prod_drinks_11", name: "Aquafina", price: 300 },
+        ];
+        for (const product of productsToSeed) {
+            batch.set(doc(db, "products", product.id), product, { merge: true });
+        }
+
+        // Ingredients
+        const ingredientsToSeed = [
+            { id: "ing_1", stock: 100000, name: "Flour" },
+            { id: "ing_7", stock: 36925, name: "Butter" },
+            { id: "ing_2", stock: 44750, name: "Sugar" },
+            { id: "ing_3", stock: 37000, name: "Salt" },
+            { id: "ing_9", stock: 240, name: "Zest" },
+            { id: "ing_4", stock: 1500, name: "Yeast" },
+            { id: "ing_10", stock: 115, name: "Lux Essence" },
+            { id: "ing_8", stock: 860, name: "Butter Scotch" },
+            { id: "ing_11", stock: 16, name: "Egg" },
+            { id: "ing_24", stock: 24355, name: "Powder Milk" },
+            { id: "ing_14", stock: 421000, name: "Improver" },
+            { id: "ing_5", stock: 1000, name: "Preservative" },
+            { id: "ing_25", stock: 12, name: "Bakers Milk" },
+            { id: "ing_22", stock: 485, name: "Softener" },
+            { id: "ing_23", stock: 360, name: "Defab Flavour" },
+            { id: "ing_17", stock: 500, name: "Condensed Milk Flavour" },
+        ];
+        for (const ing of ingredientsToSeed) {
+            batch.set(doc(db, "ingredients", ing.id), { stock: ing.stock }, { merge: true });
+        }
+
+        // Other Supplies
+        batch.set(doc(db, "other_supplies", "sup_cello_tape"), { stock: 4, name: "Cello tape", category: "Packaging", unit: "rolls" }, { merge: true });
+
+        // Storekeeper's personal inventory
+        const storekeeperId = "400001";
+        const storekeeperStock = [
+            { id: "prod_drinks_4", stock: 0 }, { id: "prod_drinks_1", stock: 15 },
+            { id: "prod_drinks_15", stock: 2 }, { id: "prod_drinks_11", stock: 3 },
+            { id: "prod_drinks_5", stock: 7 }, { id: "prod_drinks_3", stock: 1 },
+            { id: "prod_drinks_10", stock: 11 }, { id: "prod_drinks_16", stock: 3 },
+            { id: "prod_drinks_17", stock: 0 }, { id: "prod_drinks_7", stock: 5 },
+            { id: "prod_drinks_6", stock: 3 }, { id: "prod_drinks_12", stock: 5 },
+            { id: "prod_drinks_9", stock: 1 }, { id: "prod_drinks_18", stock: 7 },
+            { id: "prod_drinks_19", stock: 4 }, { id: "prod_drinks_20", stock: 3 },
+            { id: "prod_drinks_21", stock: 5 }, { id: "prod_drinks_22", stock: 4 },
+            { id: "prod_drinks_8", stock: 0 }, { id: "prod_drinks_23", stock: 2 },
+            { id: "prod_drinks_24", stock: 0 }, { id: "prod_bread_3", stock: 1 },
+            { id: "prod_bread_9", stock: 109 }, { id: "prod_bread_2", stock: 4 },
+            { id: "prod_bread_5", stock: 0 }, { id: "prod_bread_10", stock: 0 },
+        ];
+        for (const item of storekeeperStock) {
+            const product = productsData.find(p => p.id === item.id);
+            if(product) {
+                const stockRef = doc(db, 'staff', storekeeperId, 'personal_stock', item.id);
+                batch.set(stockRef, { productId: item.id, productName: product.name, stock: item.stock });
+            }
+        }
+        
+        // Recipes
+        const recipesWithCosts = [
+            { id: "rec_jumbo_short", name: "Jumbo and Short", description: "Recipe for Jumbo and Short loaves.", ingredients: [ { ingredientId: "ing_1", ingredientName: "Flour", quantity: 50000, unit: "g", costPerUnit: 1.06 }, { ingredientId: "ing_2", ingredientName: "Sugar", quantity: 6500, unit: "g", costPerUnit: 1.4 }, { ingredientId: "ing_3", ingredientName: "Salt", quantity: 800, unit: "g", costPerUnit: 0.34 }, { ingredientId: "ing_7", ingredientName: "Butter", quantity: 3000, unit: "g", costPerUnit: 2.27 }, { ingredientId: "ing_24", ingredientName: "Powder Milk", quantity: 600, unit: "g", costPerUnit: 7 }, { ingredientId: "ing_4", ingredientName: "Yeast", quantity: 500, unit: "g", costPerUnit: 6 }, { ingredientId: "ing_5", ingredientName: "Preservative", quantity: 200, unit: "g", costPerUnit: 4 }, { ingredientId: "ing_14", ingredientName: "Improver", quantity: 50, unit: "g", costPerUnit: 5 }, { ingredientId: "ing_9", ingredientName: "Zest", quantity: 60, unit: "g", costPerUnit: 27 }, { ingredientId: "ing_12", ingredientName: "Water", quantity: 28000, unit: "ml", costPerUnit: 0.001 } ]},
+            { id: "rec_round_milky", name: "Round Loaf and Milky Bite Bread", description: "Recipe for Round Loaf and Milky Bite Bread.", ingredients: [ { ingredientId: "ing_1", ingredientName: "Flour", quantity: 50000, unit: "g", costPerUnit: 1.06 }, { ingredientId: "ing_2", ingredientName: "Sugar", quantity: 6500, unit: "g", costPerUnit: 1.4 }, { ingredientId: "ing_3", ingredientName: "Salt", quantity: 800, unit: "g", costPerUnit: 0.34 }, { ingredientId: "ing_7", ingredientName: "Butter", quantity: 2000, unit: "g", costPerUnit: 2.27 }, { ingredientId: "ing_24", ingredientName: "Powder Milk", quantity: 400, unit: "g", costPerUnit: 7 }, { ingredientId: "ing_4", ingredientName: "Yeast", quantity: 500, unit: "g", costPerUnit: 6 }, { ingredientId: "ing_5", ingredientName: "Preservative", quantity: 200, unit: "g", costPerUnit: 4 }, { ingredientId: "ing_14", ingredientName: "Improver", quantity: 50, unit: "g", costPerUnit: 5 }, { ingredientId: "ing_9", ingredientName: "Zest", quantity: 60, unit: "g", costPerUnit: 27 }, { ingredientId: "ing_12", ingredientName: "Water", quantity: 28000, unit: "ml", costPerUnit: 0.001 } ]},
+            { id: "rec_creamy_delight", name: "Creamy Delight", description: "Recipe for Creamy Delight bread.", ingredients: [ { ingredientId: "ing_1", ingredientName: "Flour", quantity: 50000, unit: "g", costPerUnit: 1.06 }, { ingredientId: "ing_2", ingredientName: "Sugar", quantity: 6000, unit: "g", costPerUnit: 1.4 }, { ingredientId: "ing_3", ingredientName: "Salt", quantity: 700, unit: "g", costPerUnit: 0.34 }, { ingredientId: "ing_7", ingredientName: "Butter", quantity: 4000, unit: "g", costPerUnit: 2.27 }, { ingredientId: "ing_24", ingredientName: "Powder Milk", quantity: 1200, unit: "g", costPerUnit: 7 }, { ingredientId: "ing_11", ingredientName: "Egg", quantity: 10, unit: "pcs", costPerUnit: 180 }, { ingredientId: "ing_soy_flour", ingredientName: "Soy Flour", quantity: 1000, unit: "g", costPerUnit: 2 }, { ingredientId: "ing_malt_extract", ingredientName: "Malt Extract", quantity: 200, unit: "g", costPerUnit: 2 }, { ingredientId: "ing_stabilizer", ingredientName: "Stabilizer", quantity: 40, unit: "g", costPerUnit: 7.2 }, { ingredientId: "ing_ceed", ingredientName: "Ceed", quantity: 100, unit: "g", costPerUnit: 7.6 }, { ingredientId: "ing_4", ingredientName: "Yeast", quantity: 400, unit: "g", costPerUnit: 6 }, { ingredientId: "ing_5", ingredientName: "Preservative", quantity: 180, unit: "g", costPerUnit: 4 }, { ingredientId: "ing_16", ingredientName: "Conflaco Butter Scotch", quantity: 50, unit: "g", costPerUnit: 17 }, { ingredientId: "ing_12", ingredientName: "Water", quantity: 28000, unit: "ml", costPerUnit: 0.001 } ]},
+        ];
+        for (const recipe of recipesWithCosts) {
+            batch.set(doc(db, "recipes", recipe.id), recipe, { merge: true });
+        }
+
+
+        await batch.commit();
+        return { success: true };
+    } catch (e) {
+        console.error("Error in Done Record seed:", e);
+        return { success: false, error: (e as Error).message };
+    }
+}
 
 export async function seedSpecialScenario(): Promise<ActionResult> {
     try {
@@ -822,6 +929,7 @@ export async function seedSpecialScenario(): Promise<ActionResult> {
 
 
     
+
 
 
 

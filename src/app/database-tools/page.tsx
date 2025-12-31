@@ -24,6 +24,7 @@ import {
     clearAllData,
     seedLastData,
     verifySeedPassword,
+    seedDoneRecord, // New import
 } from "@/app/seed/actions";
 import { getAllSalesRuns, resetSalesRun, type SalesRun, getStaffList, getProductsForStaff, removeStockFromStaff } from "@/app/actions";
 import { Loader2, DatabaseZap, Trash2, ArrowLeft, RefreshCw, MinusCircle, Wand2 } from "lucide-react";
@@ -350,6 +351,15 @@ export default function DatabaseToolsPage() {
                         <CardDescription>Seed the database with demo data incrementally.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-2">
+                         <Button 
+                            variant="default"
+                            onClick={() => handleSeedAction("Done Record", seedDoneRecord)}
+                            disabled={isPending}
+                            className="w-full"
+                        >
+                            {currentlySeeding === "Done Record" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4"/>}
+                            Done Record
+                        </Button>
                         <Button 
                             variant="secondary"
                             onClick={() => handleSeedAction("Last Seed", seedLastData)}
