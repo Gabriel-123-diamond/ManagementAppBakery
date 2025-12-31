@@ -58,6 +58,7 @@ import { handleInitiateTransfer, handleReportWaste, getPendingTransfersForStaff,
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogHeader, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -373,7 +374,7 @@ function ApproveBatchDialog({ batch, user, allIngredients, onApproval }: { batch
                 <DialogFooter className="gap-2">
                      <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
                      <Button variant="destructive" onClick={handleDecline} disabled={isLoading}>
-                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4" />}
                         Decline
                     </Button>
                      <Button onClick={handleApprove} disabled={isLoading || !canApprove}>
@@ -852,6 +853,7 @@ export default function StockControlPage() {
   const userRole = user?.role;
   const canInitiateTransfer = userRole === 'Manager' || userRole === 'Supervisor' || userRole === 'Storekeeper' || userRole === 'Developer';
   const isStorekeeper = userRole === 'Storekeeper';
+  const isSupervisor = userRole === 'Supervisor';
   
   if (!user) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -948,7 +950,7 @@ export default function StockControlPage() {
                                             <TableCell className="text-right">
                                                 {t.is_sales_run && t.status === 'active' && (
                                                     <Button variant="outline" size="sm" asChild>
-                                                        <Link href={`/dashboard/sales-runs?runId=${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
+                                                        <Link href={`/dashboard/sales-runs/${t.id}`}><Eye className="mr-2 h-4 w-4"/>Manage Run</Link>
                                                     </Button>
                                                 )}
                                             </TableCell>
@@ -979,7 +981,7 @@ export default function StockControlPage() {
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold font-headline">Stock Control</h1>
       </div>
-      <Tabs defaultValue={userRole === 'Manager' || userRole === 'Developer' || userRole === 'Accountant' ? 'log' : 'initiate-transfer'}>
+      <Tabs defaultValue={isSupervisor ? 'log' : 'initiate-transfer'}>
         <div className="overflow-x-auto pb-2">
             <TabsList>
                  <TabsTrigger value="log" className="relative">

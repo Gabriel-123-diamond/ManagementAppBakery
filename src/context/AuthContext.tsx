@@ -93,7 +93,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
         // --- Comprehensive Role-Based Route Restrictions ---
         const routeRestrictions: { [path: string]: string[] } = {
-            '/dashboard/pos': ['Showroom Staff', 'Developer'],
+            '/dashboard/pos': ['Showroom Staff', 'Developer', 'Manager'],
             '/dashboard/orders': ['Manager', 'Supervisor', 'Showroom Staff', 'Accountant', 'Developer'],
             '/dashboard/inventory/products': ['Manager', 'Supervisor', 'Storekeeper', 'Accountant', 'Developer'],
             '/dashboard/inventory/recipes': ['Manager', 'Supervisor', 'Baker', 'Chief Baker', 'Storekeeper', 'Developer'],

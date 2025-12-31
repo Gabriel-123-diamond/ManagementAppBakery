@@ -213,6 +213,7 @@ export default function CustomerProfilesPage() {
         setIsDialogOpen(true);
     };
     
+    const isReadOnly = user?.role === 'Supervisor';
     const canManage = user?.role === 'Manager' || user?.role === 'Developer';
 
     return (
@@ -220,7 +221,7 @@ export default function CustomerProfilesPage() {
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold font-headline">Customer Profiles</h1>
                 {canManage && (
-                    <Button onClick={openAddDialog}>
+                    <Button onClick={openAddDialog} disabled={isReadOnly}>
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Customer
                     </Button>
                 )}

@@ -387,12 +387,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const navLinks: NavLink[] = useMemo(() => {
     const allLinks: NavLink[] = [
       { href: "/dashboard", icon: Home, label: "Dashboard", roles: ['Manager', 'Supervisor', 'Accountant', 'Showroom Staff', 'Delivery Staff', 'Baker', 'Storekeeper', 'Developer'] },
-      { href: "/dashboard/pos", icon: ShoppingBag, label: "POS", roles: ['Showroom Staff', 'Developer'] },
+      { href: "/dashboard/pos", icon: ShoppingBag, label: "POS", roles: ['Showroom Staff', 'Developer', 'Manager'] },
       {
-        icon: Inbox, label: "Orders", roles: ['Manager', 'Supervisor', 'Showroom Staff', 'Accountant', 'Developer'], sublinks: [
-          { href: "/dashboard/orders/regular", label: "Regular Orders" },
-          { href: "#", label: "Custom Orders", disabled: true },
-        ]
+        icon: Inbox, label: "Orders", roles: ['Manager', 'Supervisor', 'Showroom Staff', 'Accountant', 'Developer'], href: "/dashboard/orders/regular",
       },
       {
         icon: Package, label: "Inventory", roles: ['Manager', 'Supervisor', 'Baker', 'Storekeeper', 'Accountant', 'Showroom Staff', 'Developer', 'Delivery Staff'], notificationKey: "inventory", sublinks: [
@@ -406,11 +403,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         ]
       },
       {
-        icon: Users, label: "Customers", roles: ['Manager', 'Supervisor', 'Developer'], sublinks: [
-          { href: "/dashboard/customers/profiles", label: "Profiles" },
-          { href: "#", label: "Feedback", disabled: true },
-          { href: "#", label: "Loyalty Programs", disabled: true },
-        ]
+        icon: Users, label: "Customers", roles: ['Manager', 'Supervisor', 'Developer'], href: "/dashboard/customers/profiles"
       },
        {
         icon: Users2, label: "Staff", roles: ['Manager', 'Supervisor', 'Developer'], sublinks: [
