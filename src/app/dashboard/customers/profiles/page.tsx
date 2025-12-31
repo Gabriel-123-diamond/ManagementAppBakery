@@ -51,6 +51,7 @@ import { Label } from "@/components/ui/label";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 type Customer = {
   id: string;
@@ -140,6 +141,7 @@ function CustomerDialog({
 
 export default function CustomerProfilesPage() {
     const { toast } = useToast();
+    const { user } = useAuth();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
@@ -210,14 +212,18 @@ export default function CustomerProfilesPage() {
         setEditingCustomer(customer);
         setIsDialogOpen(true);
     };
+    
+    const canManage = user?.role === 'Manager' || user?.role === 'Developer';
 
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold font-headline">Customer Profiles</h1>
-                <Button onClick={openAddDialog}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Customer
-                </Button>
+                {canManage && (
+                    <Button onClick={openAddDialog}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add Customer
+                    </Button>
+                )}
             </div>
 
             <CustomerDialog
@@ -258,9 +264,13 @@ export default function CustomerProfilesPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onSelect={() => openEditDialog(customer)}>Edit</DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-destructive" onSelect={() => setCustomerToDelete(customer)}>Delete</DropdownMenuItem>
+                                                {canManage && (
+                                                    <>
+                                                        <DropdownMenuItem onSelect={() => openEditDialog(customer)}>Edit</DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-destructive" onSelect={() => setCustomerToDelete(customer)}>Delete</DropdownMenuItem>
+                                                    </>
+                                                )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </div>
@@ -307,9 +317,13 @@ export default function CustomerProfilesPage() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem onSelect={() => openEditDialog(customer)}>Edit</DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem className="text-destructive" onSelect={() => setCustomerToDelete(customer)}>Delete</DropdownMenuItem>
+                                                         {canManage && (
+                                                            <>
+                                                                <DropdownMenuItem onSelect={() => openEditDialog(customer)}>Edit</DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem className="text-destructive" onSelect={() => setCustomerToDelete(customer)}>Delete</DropdownMenuItem>
+                                                            </>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>

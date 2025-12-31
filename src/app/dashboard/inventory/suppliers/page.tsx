@@ -62,6 +62,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { DateRangeWithInputs } from "@/components/ui/date-range-with-inputs";
+import { useAuth } from "@/context/AuthContext";
 
 type User = {
     name: string;
@@ -468,7 +469,7 @@ function SupplierDetail({ supplier, onBack, user }: { supplier: Supplier, onBack
 
 export default function SuppliersPage() {
     const { toast } = useToast();
-    const [user, setUser] = useState<User | null>(null);
+    const { user } = useAuth();
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingSupplier, setEditingSupplier] = useState<Partial<Supplier> | null>(null);
@@ -492,11 +493,6 @@ export default function SuppliersPage() {
     }, [toast]);
     
     useEffect(() => {
-        const storedUser = localStorage.getItem('loggedInUser');
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
-        }
-
         const unsub = onSnapshot(collection(db, "suppliers"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Supplier[];
             setSuppliers(list);
@@ -555,7 +551,7 @@ export default function SuppliersPage() {
         }));
     }, [suppliers]);
     
-    const isReadOnly = user?.role === 'Manager' || user?.role === 'Supervisor';
+    const isReadOnly = user?.role === 'Supervisor';
     const canManageSuppliers = user?.role === 'Manager' || user?.role === 'Developer' || user?.role === 'Storekeeper' || user?.role === 'Accountant';
     const isStorekeeper = user?.role === 'Storekeeper';
 
@@ -678,4 +674,3 @@ export default function SuppliersPage() {
         </div>
     );
 }
-
