@@ -55,7 +55,7 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
     const [maxPrice, setMaxPrice] = useState<number | string>('');
     const [lowStockThreshold, setLowStockThreshold] = useState<number | string>(20);
 
-    const canEditPrices = user?.role === 'Developer' || user?.role === 'Manager';
+    const canEditPrices = user?.role === 'Developer' || user?.role === 'Manager' || user?.role === 'Accountant' || user?.role === 'Supervisor';
     const isOpen = product !== null;
 
     useEffect(() => {
