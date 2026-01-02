@@ -55,7 +55,7 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
     const [maxPrice, setMaxPrice] = useState<number | string>('');
     const [lowStockThreshold, setLowStockThreshold] = useState<number | string>(20);
 
-    const isDeveloper = user?.role === 'Developer';
+    const canEditPrices = user?.role === 'Developer' || user?.role === 'Manager';
     const isOpen = product !== null;
 
     useEffect(() => {
@@ -95,7 +95,7 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
         }
     };
 
-    if (!isDeveloper) return null;
+    if (!user) return null;
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -103,7 +103,7 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
                 <DialogHeader>
                     <DialogTitle>Edit Product: {product?.name}</DialogTitle>
                     <DialogDescription>
-                        Developers can make quick edits here. Changes affect all inventories.
+                        Update the details of this product. Pricing can only be changed by a Manager or Developer.
                     </DialogDescription>
                 </DialogHeader>
                  <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
@@ -127,21 +127,21 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="edit-costPrice">Cost Price (₦)</Label>
-                            <Input id="edit-costPrice" type="number" value={costPrice} onChange={(e) => setCostPrice(parseFloat(e.target.value))} />
+                            <Input id="edit-costPrice" type="number" value={costPrice} onChange={(e) => setCostPrice(parseFloat(e.target.value))} disabled={!canEditPrices} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="edit-price">Selling Price (₦)</Label>
-                            <Input id="edit-price" type="number" value={price} onChange={(e) => setPrice(parseFloat(e.target.value))} />
+                            <Input id="edit-price" type="number" value={price} onChange={(e) => setPrice(parseFloat(e.target.value))} disabled={!canEditPrices} />
                         </div>
                     </div>
                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="edit-minPrice">Min Price (₦)</Label>
-                            <Input id="edit-minPrice" type="number" placeholder="e.g. 500" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+                            <Input id="edit-minPrice" type="number" placeholder="e.g. 500" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} disabled={!canEditPrices} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="edit-maxPrice">Max Price (₦)</Label>
-                            <Input id="edit-maxPrice" type="number" placeholder="e.g. 600" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
+                            <Input id="edit-maxPrice" type="number" placeholder="e.g. 600" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} disabled={!canEditPrices} />
                         </div>
                     </div>
                     <div className="grid gap-2">
