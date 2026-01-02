@@ -2018,26 +2018,35 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
         await runTransaction(db, async (transaction) => {
             const transferRef = doc(db, 'transfers', transferId);
             const transferDoc = await transaction.get(transferRef);
+
             if (!transferDoc.exists()) {
                 throw new Error("Transfer does not exist.");
             }
+            
             const transfer = transferDoc.data() as Transfer;
 
             if (transfer.status !== 'pending' && transfer.status !== 'pending_return') {
                 throw new Error("This transfer has already been processed.");
             }
-            
+
+            // Perform all reads first
+            const itemReads = transfer.items.map(item => {
+                if (action === 'accept' && transfer.status === 'pending') {
+                    return transaction.get(doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId));
+                }
+                return Promise.resolve(null); // No read needed for other cases initially
+            });
+            const staffStockDocs = await Promise.all(itemReads);
+
+            // Now perform writes
             if (action === 'decline') {
                 transaction.update(transferRef, { status: 'cancelled' });
-                // If it's a regular transfer being declined, return stock to main inventory
                 if (transfer.status === 'pending') {
                     for (const item of transfer.items) {
                         const productRef = doc(db, 'products', item.productId);
                         transaction.update(productRef, { stock: increment(item.quantity) });
                     }
-                }
-                // If it's a return that's declined, revert the original run's status and stock
-                else if (transfer.status === 'pending_return') {
+                } else if (transfer.status === 'pending_return') {
                     for (const item of transfer.items) {
                         const staffStockRef = doc(db, 'staff', transfer.from_staff_id, 'personal_stock', item.productId);
                         transaction.update(staffStockRef, { stock: increment(item.quantity) });
@@ -2047,51 +2056,45 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
                         transaction.update(originalRunRef, { status: 'active' });
                     }
                 }
-                return;
-            }
-
-            // --- Handle Accept ---
-            if (transfer.status === 'pending_return') {
-                for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
-                }
-
-                if (transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
-                    const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
-                    transaction.update(originalRunRef, { status: 'return_completed' });
-                }
-                
-                transaction.update(transferRef, { status: 'completed' }); 
-
-            } else if (transfer.notes?.startsWith('Return from production batch')) {
-                for (const item of transfer.items) {
-                    const productRef = doc(db, 'products', item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
-                }
-                transaction.update(transferRef, { status: 'completed', time_received: serverTimestamp(), time_completed: serverTimestamp() });
-                if (transfer.originalRunId) {
-                    const batchRef = doc(db, 'production_batches', transfer.originalRunId);
-                    transaction.update(batchRef, { status: 'completed' });
-                }
-            
-            } else { 
-                for (const item of transfer.items) {
-                    const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
-                    const staffStockDoc = await transaction.get(staffStockRef);
-                    if (staffStockDoc.exists()) {
-                        transaction.update(staffStockRef, { stock: increment(item.quantity) });
-                    } else {
-                        transaction.set(staffStockRef, { productId: item.productId, productName: item.productName, stock: item.quantity });
+            } else { // Handle 'accept'
+                if (transfer.status === 'pending_return') {
+                    for (const item of transfer.items) {
+                        const productRef = doc(db, 'products', item.productId);
+                        transaction.update(productRef, { stock: increment(item.quantity) });
                     }
-                }
+                    if (transfer.originalRunId && !['showroom-return', 'delivery-return'].includes(transfer.originalRunId)) {
+                        const originalRunRef = doc(db, 'transfers', transfer.originalRunId);
+                        transaction.update(originalRunRef, { status: 'return_completed' });
+                    }
+                    transaction.update(transferRef, { status: 'completed' });
+                } else if (transfer.notes?.startsWith('Return from production batch')) {
+                    for (const item of transfer.items) {
+                        const productRef = doc(db, 'products', item.productId);
+                        transaction.update(productRef, { stock: increment(item.quantity) });
+                    }
+                    transaction.update(transferRef, { status: 'completed', time_received: serverTimestamp(), time_completed: serverTimestamp() });
+                    if (transfer.originalRunId) {
+                        const batchRef = doc(db, 'production_batches', transfer.originalRunId);
+                        transaction.update(batchRef, { status: 'completed' });
+                    }
+                } else {
+                    staffStockDocs.forEach((staffStockDoc, index) => {
+                        const item = transfer.items[index];
+                        const staffStockRef = doc(db, 'staff', transfer.to_staff_id, 'personal_stock', item.productId);
+                        if (staffStockDoc && staffStockDoc.exists()) {
+                            transaction.update(staffStockRef, { stock: increment(item.quantity) });
+                        } else {
+                            transaction.set(staffStockRef, { productId: item.productId, productName: item.productName, stock: item.quantity });
+                        }
+                    });
 
-                const newStatus = transfer.is_sales_run ? 'active' : 'completed';
-                transaction.update(transferRef, {
-                    status: newStatus,
-                    time_received: serverTimestamp(),
-                    time_completed: transfer.is_sales_run ? null : serverTimestamp()
-                });
+                    const newStatus = transfer.is_sales_run ? 'active' : 'completed';
+                    transaction.update(transferRef, {
+                        status: newStatus,
+                        time_received: serverTimestamp(),
+                        time_completed: transfer.is_sales_run ? null : serverTimestamp()
+                    });
+                }
             }
         });
         return { success: true };
@@ -2100,7 +2103,6 @@ export async function handleAcknowledgeTransfer(transferId: string, action: 'acc
         return { success: false, error: `Failed to ${action} transfer. ${(error as Error).message}` };
     }
 }
-
 
 
 export type ProductionBatch = {
