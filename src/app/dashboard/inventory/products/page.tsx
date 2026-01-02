@@ -121,7 +121,7 @@ function ProductDialog({ product, onSave, onOpenChange, categories, user }: { pr
     const [lowStockThreshold, setLowStockThreshold] = useState<number | string>(20);
     
     const isAccountant = user?.role === 'Accountant';
-    const isDeveloper = user?.role === 'Developer';
+    const canEditPrices = user?.role === 'Developer' || user?.role === 'Manager';
 
     const handleSubmit = () => {
         const newProductData = {
@@ -197,27 +197,27 @@ function ProductDialog({ product, onSave, onOpenChange, categories, user }: { pr
                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="costPrice">Cost Price (₦)</Label>
-                            <Input id="costPrice" type="number" value={costPrice} onChange={(e) => setCostPrice(parseFloat(e.target.value))} />
+                            <Input id="costPrice" type="number" value={costPrice} onChange={(e) => setCostPrice(parseFloat(e.target.value))} disabled={!canEditPrices} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="price">Selling Price (₦)</Label>
-                            <Input id="price" type="number" value={price} onChange={(e) => setPrice(parseFloat(e.target.value))} />
+                            <Input id="price" type="number" value={price} onChange={(e) => setPrice(parseFloat(e.target.value))} disabled={!canEditPrices} />
                         </div>
                     </div>
                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="minPrice">Min Price (₦)</Label>
-                            <Input id="minPrice" type="number" placeholder="e.g. 500" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+                            <Input id="minPrice" type="number" placeholder="e.g. 500" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} disabled={!canEditPrices} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="maxPrice">Max Price (₦)</Label>
-                            <Input id="maxPrice" type="number" placeholder="e.g. 600" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
+                            <Input id="maxPrice" type="number" placeholder="e.g. 600" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} disabled={!canEditPrices} />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                          <div className="grid gap-2">
                             <Label htmlFor="stock">Stock</Label>
-                            <Input id="stock" type="number" value={stock} onChange={(e) => setStock(parseInt(e.target.value))} disabled={!isDeveloper}/>
+                            <Input id="stock" type="number" value={stock} onChange={(e) => setStock(parseInt(e.target.value))} disabled={!canEditPrices}/>
                          </div>
                          <div className="grid gap-2">
                             <Label htmlFor="unit">Unit</Label>

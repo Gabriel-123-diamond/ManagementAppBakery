@@ -55,7 +55,7 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
     const [maxPrice, setMaxPrice] = useState<number | string>('');
     const [lowStockThreshold, setLowStockThreshold] = useState<number | string>(20);
 
-    const canEditPrices = user?.role === 'Developer' || user?.role === 'Manager' || user?.role === 'Accountant' || user?.role === 'Supervisor';
+    const canEditPrices = user?.role === 'Developer' || user?.role === 'Manager';
     const isOpen = product !== null;
 
     useEffect(() => {
@@ -72,6 +72,14 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
 
     const handleSubmit = async () => {
         if (!product) return;
+        if (!canEditPrices) {
+            toast({
+                variant: "destructive",
+                title: "Permission Denied",
+                description: "You do not have permission to edit these fields.",
+            });
+            return;
+        }
 
         const productData = {
             name,
@@ -95,15 +103,15 @@ export function ProductEditDialog({ product, onOpenChange, onProductUpdate, user
         }
     };
 
-    if (!user) return null;
-
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Edit Product: {product?.name}</DialogTitle>
                     <DialogDescription>
-                        Update the details of this product. Pricing can only be changed by a Manager or Developer.
+                        {canEditPrices
+                            ? "Managers and Developers can make quick edits here. Changes affect all inventories."
+                            : "You do not have permission to edit these fields."}
                     </DialogDescription>
                 </DialogHeader>
                  <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
